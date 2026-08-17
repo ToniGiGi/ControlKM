@@ -11,15 +11,15 @@ const prisma = new PrismaClient({ adapter })
 
 async function main() {
   await prisma.user.upsert({
-    where: { email: 'admin@qrq.com' },
+    where: { email: 'tonygarcia692@gmail.com' },
     update: {},
     create: {
-      email: 'admin@qrq.com',
+      email: 'tonygarcia692@gmail.com',
       password: 'password123',
       role: 'SUPER_ADMIN'
     }
   })
-  console.log("Admin user seeded: admin@qrq.com / password123")
+  console.log("Admin user seeded: tonygarcia692@gmail.com / password123")
 }
 
 main().catch(console.error).finally(() => prisma.$disconnect())
