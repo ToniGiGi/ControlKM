@@ -4,6 +4,8 @@ import { Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'
 import { Toaster } from 'sonner'
 
+export const runtime = 'edge';
+
 const geistSans = Geist({
   subsets: ['latin'],
   variable: '--font-geist-sans',
