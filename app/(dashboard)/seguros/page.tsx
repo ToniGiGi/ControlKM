@@ -4,9 +4,11 @@ import { getInsurances, getVehicles, getInsuranceCompanies } from '@/app/actions
 export const dynamic = 'force-dynamic'
 
 export default async function SegurosPage() {
-  const insurances = await getInsurances()
-  const vehicles = await getVehicles()
-  const insuranceCompanies = await getInsuranceCompanies()
+  const [insurances, vehicles, insuranceCompanies] = await Promise.all([
+    getInsurances(),
+    getVehicles(),
+    getInsuranceCompanies()
+  ])
   
   return <InsuranceList initialInsurances={insurances} vehicles={vehicles} insuranceCompanies={insuranceCompanies} />
 }
