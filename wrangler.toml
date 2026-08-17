@@ -1,0 +1,11 @@
+name = "fleetcore"
+compatibility_date = "2024-03-20"
+compatibility_flags = ["nodejs_compat"]
+
+[[d1_databases]]
+binding = "DB" 
+database_name = "fleetcore-db"
+database_id = "" # TODO: Rellenar cuando se cree la base de datos en Cloudflare
+
+[build]
+command = "npm run build"

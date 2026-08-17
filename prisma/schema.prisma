@@ -1,0 +1,237 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+  engineType      = "library"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String    @id @default(cuid())
+  email     String    @unique
+  password  String
+  role      String    @default("CONDUCTOR")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  employee  Employee?
+}
+
+model Employee {
+  id                  String    @id @default(cuid())
+  userId              String?   @unique
+  user                User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  nombre              String
+  email               String?
+  telefono            String?
+  puesto              String?
+  area                String?
+  sucursal            String?
+  licencia            String?
+  vencimientoLicencia DateTime?
+  estado              String    @default("ACTIVO")
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  vehiculosAsignados Vehicle[]
+  fotoUrl             String?
+}
+
+model Vehicle {
+  id                        String        @id @default(cuid())
+  nombreInterno             String
+  marca                     String
+  modelo                    String
+  anio                      Int
+  tipoUnidad                String
+  placas                    String        @unique
+  vin                       String?       @unique
+  numeroEconomico           String?
+  color                     String?
+  combustible               String?
+  capacidadTanque           Float?
+  kmInicial                 Int           @default(0)
+  kmActual                  Int           @default(0)
+  estado                    String        @default("ACTIVO")
+  fechaAsignacion           DateTime?
+  sucursal                  String?
+  proximoMantenimientoFecha DateTime?
+  proximoMantenimientoKm    Int?
+  createdAt                 DateTime      @default(now())
+  updatedAt                 DateTime      @updatedAt
+  fotoUrl                   String?
+  orden                     Int           @default(0)
+
+  empleadoId String?
+  empleado   Employee? @relation(fields: [empleadoId], references: [id], onDelete: SetNull)
+
+  seguros        Insurance[]
+  mantenimientos Maintenance[]
+  incidencias    Incident[]
+  viajes         Trip[]
+  cargas         FuelLog[]
+  gastos         Expense[]
+  fuelRequests   FuelRequest[]
+
+  telemetryStatus String @default("apagado")
+}
+
+model Insurance {
+  id          String          @id @default(cuid())
+  vehiculoId  String
+  vehiculo    Vehicle         @relation(fields: [vehiculoId], references: [id], onDelete: Cascade)
+  aseguradora String
+  poliza      String
+  cobertura   String?
+  inicio      DateTime
+  vencimiento DateTime
+  costo       Float?
+  estado      String          @default("VIGENTE")
+  archivoPdf  String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+}
+
+model Maintenance {
+  id          String          @id @default(cuid())
+  vehiculoId  String
+  vehiculo    Vehicle         @relation(fields: [vehiculoId], references: [id], onDelete: Cascade)
+  tipo        String
+  fecha       DateTime
+  km          Int
+  taller      String?
+  descripcion String
+  costo         Float
+  facturaPdf    String?
+  estado        String        @default("PENDIENTE")
+  registradoPor String? @default("Administrador")
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+}
+
+model Incident {
+  id          String         @id @default(cuid())
+  vehiculoId  String
+  vehiculo    Vehicle        @relation(fields: [vehiculoId], references: [id], onDelete: Cascade)
+  tipo        String
+  fecha       DateTime
+  gravedad    String
+  descripcion String
+  estado      String         @default("ABIERTA")
+  costo       Float?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+}
+
+model Trip {
+  id         String   @id @default(cuid())
+  vehiculoId String
+  vehiculo   Vehicle  @relation(fields: [vehiculoId], references: [id], onDelete: Cascade)
+  origen     String
+  destino    String
+  fecha      DateTime
+  km         Int
+  motivo     String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model FuelLog {
+  id         String   @id @default(cuid())
+  vehiculoId String
+  vehiculo   Vehicle  @relation(fields: [vehiculoId], references: [id], onDelete: Cascade)
+  fecha      DateTime
+  litros     Float
+  costoLitro Float
+  km         Int
+  gasolinera String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Expense {
+  id          String   @id @default(cuid())
+  vehiculoId  String
+  vehiculo    Vehicle  @relation(fields: [vehiculoId], references: [id], onDelete: Cascade)
+  categoria   String // GASOLINA, MANTENIMIENTO, REPARACION, ACEITE, NEUMATICOS, etc.
+  monto       Float
+  fecha       DateTime @default(now())
+  descripcion String?
+  proveedor   String?
+  estado      String        @default("PENDIENTE")
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model FuelRequest {
+  id                String        @id @default(cuid())
+  vehiculoId        String
+  vehiculo          Vehicle       @relation(fields: [vehiculoId], references: [id], onDelete: Cascade)
+  
+  // Auditoria
+  solicitanteNombre String?
+  fechaSolicitud    DateTime      @default(now())
+  
+  // Datos Excel
+  motivo            String
+  tarjetaToka       String?
+  numeroTag         String?
+  
+  // Rutas
+  rutas             String
+  kmAproximado      Float
+  kmHolgura         Float
+  rendimiento       Float         @default(10.0) // km/l
+
+  // Calculos Gasolina
+  tipoGasolina      String        // VERDE, ROJA, DIESEL
+  precioGasolina    Float
+  litrosSolicitados Float
+  costoGasolina     Float
+
+  // Extras
+  numCasetas        Int?          @default(0)
+  costoCasetas      Float?        @default(0)
+  costoComidas      Float?        @default(0)
+
+  // Gran Total
+  costoTotal        Float
+  estado            String        @default("PENDIENTE")
+  departamento      String?  @default("No especificado")
+  area              String?  @default("No especificada")
+
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+}
+
+
+model Branch {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Department {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model InsuranceCompany {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model OrganizationConfig {
+  id        String   @id @default("default")
+  name      String   @default("Mi Organización")
+  logoUrl   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
