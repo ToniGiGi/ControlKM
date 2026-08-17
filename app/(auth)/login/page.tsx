@@ -21,7 +21,7 @@ export default async function LoginPage({
 
         {/* Background image — fills entire panel */}
         <Image
-          src="/vehiculos login.png"
+          src="/vehiculos-login.png"
           alt="Flotilla de Vehículos"
           fill
           className="object-cover object-center"
