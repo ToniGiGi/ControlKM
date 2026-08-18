@@ -37,6 +37,9 @@ model Employee {
 
   vehiculosAsignados Vehicle[]
   fotoUrl             String?
+
+  @@index([estado])
+  @@index([userId])
 }
 
 model Vehicle {
@@ -76,6 +79,9 @@ model Vehicle {
   fuelRequests   FuelRequest[]
 
   telemetryStatus String @default("apagado")
+
+  @@index([empleadoId])
+  @@index([estado])
 }
 
 model Insurance {
@@ -92,6 +98,10 @@ model Insurance {
   archivoPdf  String?
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
+
+  @@index([vehiculoId])
+  @@index([estado])
+  @@index([vencimiento])
 }
 
 model Maintenance {
@@ -109,6 +119,10 @@ model Maintenance {
   registradoPor String? @default("Administrador")
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
+
+  @@index([vehiculoId])
+  @@index([estado])
+  @@index([fecha])
 }
 
 model Incident {
@@ -123,6 +137,10 @@ model Incident {
   costo       Float?
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
+
+  @@index([vehiculoId])
+  @@index([estado])
+  @@index([fecha])
 }
 
 model Trip {
@@ -136,6 +154,9 @@ model Trip {
   motivo     String?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+
+  @@index([vehiculoId])
+  @@index([fecha])
 }
 
 model FuelLog {
@@ -149,6 +170,9 @@ model FuelLog {
   gasolinera String?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+
+  @@index([vehiculoId])
+  @@index([fecha])
 }
 
 model Expense {
@@ -163,6 +187,11 @@ model Expense {
   estado      String        @default("PENDIENTE")
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
+
+  @@index([vehiculoId])
+  @@index([estado])
+  @@index([categoria])
+  @@index([fecha])
 }
 
 model FuelRequest {
@@ -204,6 +233,9 @@ model FuelRequest {
 
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
+
+  @@index([vehiculoId])
+  @@index([estado])
 }
 
 

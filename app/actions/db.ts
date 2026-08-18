@@ -4,44 +4,74 @@ import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 
 export async function getVehicles() {
-  const dbVehicles = await prisma.vehicle.findMany({
-    orderBy: [
-      { orden: 'asc' },
-      { createdAt: 'desc' }
-    ],
-    include: {
-      empleado: true,
-      seguros: true,
-      mantenimientos: true,
-      incidencias: true,
-      viajes: true,
-      cargas: true,
-      gastos: true,
-      fuelRequests: true,
-    }
+  // Optimized: 4 parallel queries instead of 8 JOINs
+  const [dbVehicles, allGastos, allMantenimientos, allFuelRequests] = await Promise.all([
+    prisma.vehicle.findMany({
+      orderBy: [
+        { orden: 'asc' },
+        { createdAt: 'desc' }
+      ],
+      include: {
+        empleado: { select: { id: true, nombre: true, email: true, telefono: true, puesto: true, fotoUrl: true } },
+        seguros: { orderBy: { vencimiento: 'desc' }, take: 1 },
+      }
+    }),
+    prisma.expense.findMany({
+      select: { vehiculoId: true, categoria: true, monto: true }
+    }),
+    prisma.maintenance.findMany({
+      where: { estado: 'APROBADA' },
+      select: { vehiculoId: true, costo: true, km: true }
+    }),
+    prisma.fuelRequest.findMany({
+      where: { estado: 'APROBADA' },
+      select: { vehiculoId: true, costoGasolina: true, costoCasetas: true, costoComidas: true }
+    })
+  ])
+
+  // Pre-index by vehiculoId for O(1) lookup
+  const gastosByVehicle = new Map<string, typeof allGastos>()
+  allGastos.forEach(g => {
+    const list = gastosByVehicle.get(g.vehiculoId) || []
+    list.push(g)
+    gastosByVehicle.set(g.vehiculoId, list)
+  })
+
+  const mantsByVehicle = new Map<string, typeof allMantenimientos>()
+  allMantenimientos.forEach(m => {
+    const list = mantsByVehicle.get(m.vehiculoId) || []
+    list.push(m)
+    mantsByVehicle.set(m.vehiculoId, list)
+  })
+
+  const frByVehicle = new Map<string, typeof allFuelRequests>()
+  allFuelRequests.forEach(fr => {
+    const list = frByVehicle.get(fr.vehiculoId) || []
+    list.push(fr)
+    frByVehicle.set(fr.vehiculoId, list)
   })
 
   return dbVehicles.map(v => {
-    // Calcular gastos aprobados de viÃ¡ticos
-    const approvedFuelRequests = v.fuelRequests.filter(fr => fr.estado === 'APROBADA');
-    const gasolinaViaticos = approvedFuelRequests.reduce((a, b) => a + (b.costoGasolina || 0), 0);
-    const casetasViaticos = approvedFuelRequests.reduce((a, b) => a + (b.costoCasetas || 0), 0);
-    const comidasViaticos = approvedFuelRequests.reduce((a, b) => a + (b.costoComidas || 0), 0);
+    const vGastos = gastosByVehicle.get(v.id) || []
+    const vMants = mantsByVehicle.get(v.id) || []
+    const vFR = frByVehicle.get(v.id) || []
 
-    // Calcular gastos por categorÃ­a
+    const gasolinaViaticos = vFR.reduce((a, b) => a + (b.costoGasolina || 0), 0)
+    const casetasViaticos = vFR.reduce((a, b) => a + (b.costoCasetas || 0), 0)
+    const comidasViaticos = vFR.reduce((a, b) => a + (b.costoComidas || 0), 0)
+
     const gastosMapped = {
-      gasolina: v.gastos.filter(g => g.categoria === 'GASOLINA').reduce((a, b) => a + b.monto, 0) + gasolinaViaticos,
-      mantenimiento: v.gastos.filter(g => g.categoria === 'MANTENIMIENTO').reduce((a, b) => a + b.monto, 0) + v.mantenimientos.filter((m: any) => m.estado === 'APROBADA').reduce((a: number, b: any) => a + (b.costo || 0), 0),
-      reparacion: v.gastos.filter(g => g.categoria === 'REPARACION').reduce((a, b) => a + b.monto, 0),
-      aceite: v.gastos.filter(g => g.categoria === 'ACEITE').reduce((a, b) => a + b.monto, 0),
-      neumaticos: v.gastos.filter(g => g.categoria === 'NEUMATICOS').reduce((a, b) => a + b.monto, 0),
-      aditamentos: v.gastos.filter(g => g.categoria === 'ADITAMENTOS').reduce((a, b) => a + b.monto, 0),
-      casetas: v.gastos.filter(g => g.categoria === 'CASETAS').reduce((a, b) => a + b.monto, 0) + casetasViaticos,
-      multas: v.gastos.filter(g => g.categoria === 'MULTAS').reduce((a, b) => a + b.monto, 0),
-      otros: v.gastos.filter(g => g.categoria === 'OTROS').reduce((a, b) => a + b.monto, 0) + comidasViaticos,
+      gasolina: vGastos.filter(g => g.categoria === 'GASOLINA').reduce((a, b) => a + b.monto, 0) + gasolinaViaticos,
+      mantenimiento: vGastos.filter(g => g.categoria === 'MANTENIMIENTO').reduce((a, b) => a + b.monto, 0) + vMants.reduce((a, b) => a + (b.costo || 0), 0),
+      reparacion: vGastos.filter(g => g.categoria === 'REPARACION').reduce((a, b) => a + b.monto, 0),
+      aceite: vGastos.filter(g => g.categoria === 'ACEITE').reduce((a, b) => a + b.monto, 0),
+      neumaticos: vGastos.filter(g => g.categoria === 'NEUMATICOS').reduce((a, b) => a + b.monto, 0),
+      aditamentos: vGastos.filter(g => g.categoria === 'ADITAMENTOS').reduce((a, b) => a + b.monto, 0),
+      casetas: vGastos.filter(g => g.categoria === 'CASETAS').reduce((a, b) => a + b.monto, 0) + casetasViaticos,
+      multas: vGastos.filter(g => g.categoria === 'MULTAS').reduce((a, b) => a + b.monto, 0),
+      otros: vGastos.filter(g => g.categoria === 'OTROS').reduce((a, b) => a + b.monto, 0) + comidasViaticos,
     }
 
-    // Telemetria por defecto
     const telemetria = {
       dispositivo: 'GPS-000',
       estado: v.estado === 'ACTIVO' ? 'en_movimiento' : 'detenido',
@@ -53,9 +83,8 @@ export async function getVehicles() {
 
     const maxKm = Math.max(
       v.kmActual || 0,
-      ...(v.mantenimientos?.map(m => m.km || 0) || []),
-      ...(v.fuelRequests?.map(fr => fr.odometro || 0) || [])
-    );
+      ...(vMants.map(m => m.km || 0)),
+    )
 
     return {
       ...v,
@@ -492,17 +521,37 @@ export async function getAlerts(empleadoId?: string) {
   const generatedAlerts: any[] = [];
   const filter = empleadoId ? { vehiculo: { empleadoId } } : {};
 
-  // 1. Seguros por vencer (30 días) y vencidos
-  const seguros = await prisma.insurance.findMany({
-    where: {
-      ...filter,
-      OR: [
-        { estado: 'VIGENTE' },
-        { estado: 'VENCIDO' }
-      ]
-    },
-    include: { vehiculo: true }
-  });
+  // Optimized: 5 queries in PARALLEL instead of sequential
+  const [seguros, recientesIncidencias, recientesCombustible, recientesGastos, recientesMantenimientos] = await Promise.all([
+    prisma.insurance.findMany({
+      where: { ...filter, OR: [{ estado: 'VIGENTE' }, { estado: 'VENCIDO' }] },
+      include: { vehiculo: { select: { id: true, nombreInterno: true, marca: true } } }
+    }),
+    prisma.incident.findMany({
+      where: { estado: 'ABIERTA', ...filter },
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+      include: { vehiculo: { select: { id: true, nombreInterno: true, marca: true } } }
+    }),
+    prisma.fuelRequest.findMany({
+      where: { estado: 'PENDIENTE', ...filter },
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+      include: { vehiculo: { select: { id: true, nombreInterno: true, marca: true } } }
+    }),
+    prisma.expense.findMany({
+      where: { estado: 'PENDIENTE', ...filter },
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+      include: { vehiculo: { select: { id: true, nombreInterno: true, marca: true } } }
+    }),
+    prisma.maintenance.findMany({
+      where: { estado: 'PENDIENTE', ...filter },
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+      include: { vehiculo: { select: { id: true, nombreInterno: true, marca: true } } }
+    })
+  ]);
 
   const now = new Date();
   seguros.forEach(seguro => {
@@ -533,17 +582,6 @@ export async function getAlerts(empleadoId?: string) {
     }
   });
 
-  // 2. Incidencias ABIERTAS
-  const recientesIncidencias = await prisma.incident.findMany({
-    where: { 
-      estado: 'ABIERTA',
-      ...filter
-    },
-    orderBy: { createdAt: 'desc' },
-    take: 5,
-    include: { vehiculo: true }
-  });
-
   recientesIncidencias.forEach(inc => {
     const created = new Date(inc.createdAt);
     const diffHours = Math.abs(now.getTime() - created.getTime()) / 36e5;
@@ -560,17 +598,6 @@ export async function getAlerts(empleadoId?: string) {
     }
   });
 
-  // 3. Combustible por Aprobar
-  const recientesCombustible = await prisma.fuelRequest.findMany({
-    where: { 
-      estado: 'PENDIENTE',
-      ...filter
-    },
-    orderBy: { createdAt: 'desc' },
-    take: 5,
-    include: { vehiculo: true }
-  });
-
   recientesCombustible.forEach(req => {
     generatedAlerts.push({
       id: `combustible-${req.id}`,
@@ -583,17 +610,6 @@ export async function getAlerts(empleadoId?: string) {
     });
   });
 
-  // 4. Gastos PENDIENTE
-  const recientesGastos = await prisma.expense.findMany({
-    where: { 
-      estado: 'PENDIENTE',
-      ...filter
-    },
-    orderBy: { createdAt: 'desc' },
-    take: 5,
-    include: { vehiculo: true }
-  });
-
   recientesGastos.forEach(exp => {
     generatedAlerts.push({
       id: `gasto-${exp.id}`,
@@ -604,17 +620,6 @@ export async function getAlerts(empleadoId?: string) {
       href: '/gastos',
       fecha: exp.createdAt
     });
-  });
-
-  // 5. Mantenimientos PENDIENTE
-  const recientesMantenimientos = await prisma.maintenance.findMany({
-    where: { 
-      estado: 'PENDIENTE',
-      ...filter
-    },
-    orderBy: { createdAt: 'desc' },
-    take: 5,
-    include: { vehiculo: true }
   });
 
   recientesMantenimientos.forEach(m => {
@@ -634,20 +639,29 @@ export async function getAlerts(empleadoId?: string) {
 
 export async function getMonthlyExpenses(empleadoId?: string) {
   const filter = empleadoId ? { vehiculo: { empleadoId } } : {};
-  const expenses = await prisma.expense.findMany({ where: filter });
   
-  const fuelRequests = await prisma.fuelRequest.findMany({
-    where: { estado: 'APROBADA', ...filter }
-  });
-
-  const maintenances = await prisma.maintenance.findMany({
-    where: { estado: 'APROBADA', ...filter }
-  });
+  // Optimized: filter by last 6 months + parallel queries
+  const now = new Date();
+  const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+  
+  const [expenses, fuelRequests, maintenances] = await Promise.all([
+    prisma.expense.findMany({
+      where: { ...filter, fecha: { gte: sixMonthsAgo } },
+      select: { fecha: true, categoria: true, monto: true }
+    }),
+    prisma.fuelRequest.findMany({
+      where: { estado: 'APROBADA', ...filter, createdAt: { gte: sixMonthsAgo } },
+      select: { createdAt: true, costoGasolina: true, costoCasetas: true, costoComidas: true }
+    }),
+    prisma.maintenance.findMany({
+      where: { estado: 'APROBADA', ...filter, fecha: { gte: sixMonthsAgo } },
+      select: { fecha: true, costo: true }
+    })
+  ]);
 
   const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
   const dataMap = new Map();
   
-  const now = new Date();
   for (let i = 5; i >= 0; i--) {
     let d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     let monthName = months[d.getMonth()];
@@ -672,7 +686,7 @@ export async function getMonthlyExpenses(empleadoId?: string) {
   });
 
   fuelRequests.forEach(fr => {
-    const d = fr.createdAt; // or fechaSolicitud
+    const d = fr.createdAt;
     const key = `${d.getFullYear()}-${d.getMonth()}`;
     if (dataMap.has(key)) {
       const entry = dataMap.get(key);
@@ -703,9 +717,7 @@ export async function rejectMaintenance(id: string) { const main = await prisma.
 // --- Organization (Branches & Departments) ---
 
 export async function getBranches() {
-  const branches = await prisma.branch.findMany({ orderBy: { name: 'asc' } })
-  console.log('getBranches called. Found:', branches)
-  return branches
+  return await prisma.branch.findMany({ orderBy: { name: 'asc' } })
 }
 
 export async function createBranch(name: string) {
