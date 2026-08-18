@@ -14,6 +14,7 @@ import {
   TriangleAlert,
   ArrowUpRight,
   ShieldCheck,
+  Loader2,
 } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
 import { KpiCard } from '@/components/dashboard/kpi-card'
@@ -45,13 +46,22 @@ export default function DashboardPage() {
   const [vehicles, setVehicles] = React.useState<any[]>([])
   const [dynamicAlerts, setDynamicAlerts] = React.useState<any[]>([])
   const [monthlyExpensesData, setMonthlyExpensesData] = React.useState<any[]>([])
+  const [isLoading, setIsLoading] = React.useState(true)
 
   React.useEffect(() => {
-    getVehicles().then(setVehicles)
-    getAlerts().then(setDynamicAlerts)
-    
-    // Only pass empleadoId if role is conductor to filter expenses
-    getMonthlyExpenses(role === 'conductor' ? config.empleadoId : undefined).then(setMonthlyExpensesData)
+    setIsLoading(true)
+    Promise.all([
+      getVehicles(),
+      getAlerts(),
+      getMonthlyExpenses(role === 'conductor' ? config.empleadoId : undefined)
+    ]).then(([v, a, m]) => {
+      setVehicles(v)
+      setDynamicAlerts(a)
+      setMonthlyExpensesData(m)
+      setIsLoading(false)
+    }).catch(() => {
+      setIsLoading(false)
+    })
   }, [role, config.empleadoId])
 
   const visibles = isConductor
@@ -94,7 +104,17 @@ export default function DashboardPage() {
     .slice(0, 5)
 
   return (
-    <div className="flex-1 space-y-6 p-4 md:p-8 pt-6 max-w-screen-2xl mx-auto w-full">
+    <div className="flex-1 space-y-6 p-4 md:p-8 pt-6 max-w-screen-2xl mx-auto w-full relative">
+      
+      {/* Overlay de Carga */}
+      {isLoading && (
+        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm rounded-xl">
+          <Loader2 className="size-10 animate-spin text-primary mb-4" />
+          <h3 className="text-xl font-semibold text-foreground">Cargando métricas...</h3>
+          <p className="text-sm text-muted-foreground mt-2">Calculando gastos y alertas de tu flotilla</p>
+        </div>
+      )}
+
       <PageHeader
         title={isConductor ? `Hola, ${config.nombre}` : 'Dashboard general'}
         description={
