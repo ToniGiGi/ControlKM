@@ -21,6 +21,7 @@ import { KpiCard } from '@/components/dashboard/kpi-card'
 import { ExpenseTrendChart, CategoryDonut } from '@/components/dashboard/charts'
 import { VehicleStatusBadge, TelemetryBadge } from '@/components/status-badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { CustomLoader } from '@/components/ui/custom-loader'
 import { Badge } from '@/components/ui/badge'
 import { useRole } from '@/components/role-provider'
 import { getVehicles, getAlerts, getMonthlyExpenses } from '@/app/actions/db'
@@ -108,10 +109,13 @@ export default function DashboardPage() {
       
       {/* Overlay de Carga */}
       {isLoading && (
-        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm rounded-xl">
-          <Loader2 className="size-10 animate-spin text-primary mb-4" />
-          <h3 className="text-xl font-semibold text-foreground">Cargando métricas...</h3>
-          <p className="text-sm text-muted-foreground mt-2">Calculando gastos y alertas de tu flotilla</p>
+        <div className="absolute inset-0 z-50 bg-background/80 backdrop-blur-sm rounded-xl">
+          <div className="sticky top-0 w-full min-h-[70vh] flex flex-col items-center justify-center">
+            <CustomLoader 
+              title="Cargando métricas..." 
+              description="Calculando gastos y alertas de tu flotilla" 
+            />
+          </div>
         </div>
       )}
 
