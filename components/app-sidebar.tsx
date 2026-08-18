@@ -70,7 +70,7 @@ const configuracionConductor: NavItem[] = [
   { label: 'Personalización', href: '/personalizacion', icon: Settings },
 ]
 
-function NavGroup({ title, items, isCollapsed }: { title: string; items: NavItem[], isCollapsed?: boolean }) {
+function NavGroup({ title, items, isCollapsed, pendingHref, onNavigate }: { title: string; items: NavItem[], isCollapsed?: boolean, pendingHref: string | null, onNavigate: (href: string) => void }) {
   const pathname = usePathname()
   return (
     <div className={cn("px-3", isCollapsed && "px-2")}>
@@ -83,8 +83,10 @@ function NavGroup({ title, items, isCollapsed }: { title: string; items: NavItem
       )}
       <ul className="space-y-1">
         {items.map((item) => {
+          // Use pendingHref for instant feedback, fall back to actual pathname
+          const effectivePath = pendingHref || pathname
           const active =
-            item.href === '/' ? pathname === '/' : pathname.startsWith(item.href) && item.href !== '#'
+            item.href === '/' ? effectivePath === '/' : effectivePath.startsWith(item.href) && item.href !== '#'
           const Icon = item.icon
           if (item.disabled) {
             return (
@@ -114,6 +116,7 @@ function NavGroup({ title, items, isCollapsed }: { title: string; items: NavItem
               <Link
                 href={item.href}
                 title={item.label}
+                onClick={() => onNavigate(item.href)}
                 className={cn(
                   'flex items-center gap-2.5 rounded-lg py-1.5 text-[13px] transition-all duration-200 font-medium',
                   isCollapsed ? 'justify-center px-0' : 'px-3',
@@ -146,10 +149,22 @@ export function AppSidebar({ isCollapsed }: { isCollapsed?: boolean }) {
   
   const { sidebarColor } = useTheme()
   const [isMounted, setIsMounted] = useState(false)
+  const [pendingHref, setPendingHref] = useState<string | null>(null)
 
   useEffect(() => {
     setIsMounted(true)
   }, [])
+
+  // Reset pendingHref when actual pathname catches up
+  useEffect(() => {
+    setPendingHref(null)
+  }, [pathname])
+
+  const handleNavigate = (href: string) => {
+    if (href !== pathname) {
+      setPendingHref(href)
+    }
+  }
 
   return (
     <aside 
@@ -160,14 +175,14 @@ export function AppSidebar({ isCollapsed }: { isCollapsed?: boolean }) {
       style={isMounted ? { backgroundColor: sidebarColor } : { backgroundColor: '#00173A' }}
     >
       <nav className="flex-1 overflow-y-auto pb-4 space-y-2 mt-6 custom-scrollbar">
-        <NavGroup title="Principal" items={principal} isCollapsed={isCollapsed} />
-        {!isSuperAdmin && <NavGroup title="Cuenta" items={cuenta} isCollapsed={isCollapsed} />}
-        {!isConductor && <NavGroup title="Personas" items={personas} isCollapsed={isCollapsed} />}
-        {!isConductor && <NavGroup title="Operación" items={operacion} isCollapsed={isCollapsed} />}
-        {isConductor && <NavGroup title="Operación" items={operacionConductor} isCollapsed={isCollapsed} />}
+        <NavGroup title="Principal" items={principal} isCollapsed={isCollapsed} pendingHref={pendingHref} onNavigate={handleNavigate} />
+        {!isSuperAdmin && <NavGroup title="Cuenta" items={cuenta} isCollapsed={isCollapsed} pendingHref={pendingHref} onNavigate={handleNavigate} />}
+        {!isConductor && <NavGroup title="Personas" items={personas} isCollapsed={isCollapsed} pendingHref={pendingHref} onNavigate={handleNavigate} />}
+        {!isConductor && <NavGroup title="Operación" items={operacion} isCollapsed={isCollapsed} pendingHref={pendingHref} onNavigate={handleNavigate} />}
+        {isConductor && <NavGroup title="Operación" items={operacionConductor} isCollapsed={isCollapsed} pendingHref={pendingHref} onNavigate={handleNavigate} />}
         
-        {!isConductor && <NavGroup title="Configuración" items={configuracionAdmin} isCollapsed={isCollapsed} />}
-        {isConductor && <NavGroup title="Configuración" items={configuracionConductor} isCollapsed={isCollapsed} />}
+        {!isConductor && <NavGroup title="Configuración" items={configuracionAdmin} isCollapsed={isCollapsed} pendingHref={pendingHref} onNavigate={handleNavigate} />}
+        {isConductor && <NavGroup title="Configuración" items={configuracionConductor} isCollapsed={isCollapsed} pendingHref={pendingHref} onNavigate={handleNavigate} />}
         {isConductor && (
           <div className={cn(
             "mx-4 mt-6 rounded-lg border border-sidebar-border bg-sidebar-accent/40 p-3 text-xs text-sidebar-foreground/70 overflow-hidden transition-all duration-300",
