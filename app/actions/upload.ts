@@ -1,7 +1,6 @@
 'use server'
 
-import { PutObjectCommand } from '@aws-sdk/client-s3'
-import { r2, R2_BUCKET, R2_PUBLIC_URL } from '@/lib/r2'
+import { uploadToR2 } from '@/lib/r2'
 
 const MAX_SIZE = 5 * 1024 * 1024 // 5MB
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
@@ -16,12 +15,5 @@ export async function uploadImage(formData: FormData, folder: 'vehiculos' | 'emp
   const key = `${folder}/${crypto.randomUUID()}.${ext}`
   const buffer = new Uint8Array(await file.arrayBuffer())
 
-  await r2.send(new PutObjectCommand({
-    Bucket: R2_BUCKET,
-    Key: key,
-    Body: buffer,
-    ContentType: file.type,
-  }))
-
-  return `${R2_PUBLIC_URL}/${key}`
+  return uploadToR2(key, buffer, file.type)
 }

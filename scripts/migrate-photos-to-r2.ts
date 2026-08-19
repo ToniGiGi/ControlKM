@@ -1,8 +1,7 @@
 import 'dotenv/config'
 
 import { createClient } from '@libsql/client'
-import { PutObjectCommand } from '@aws-sdk/client-s3'
-import { r2, R2_BUCKET, R2_PUBLIC_URL } from '../lib/r2'
+import { uploadToR2 } from '../lib/r2'
 
 async function migrateTable(client: ReturnType<typeof createClient>, table: 'Vehicle' | 'Employee', folder: string) {
   const { rows } = await client.execute(`SELECT id, fotoUrl FROM "${table}" WHERE fotoUrl LIKE 'data:%'`)
@@ -18,17 +17,10 @@ async function migrateTable(client: ReturnType<typeof createClient>, table: 'Veh
     }
     const [, mimeType, base64Data] = match
     const ext = mimeType.split('/')[1]
-    const buffer = Buffer.from(base64Data, 'base64')
+    const buffer = new Uint8Array(Buffer.from(base64Data, 'base64'))
     const key = `${folder}/${id}.${ext}`
 
-    await r2.send(new PutObjectCommand({
-      Bucket: R2_BUCKET,
-      Key: key,
-      Body: buffer,
-      ContentType: mimeType,
-    }))
-
-    const publicUrl = `${R2_PUBLIC_URL}/${key}`
+    const publicUrl = await uploadToR2(key, buffer, mimeType)
     await client.execute({ sql: `UPDATE "${table}" SET fotoUrl = ? WHERE id = ?`, args: [publicUrl, id] })
     console.log(`  ${id}: migrada -> ${publicUrl}`)
   }
