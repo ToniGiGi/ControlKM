@@ -2,11 +2,17 @@
 
 import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
+import { hashPassword } from '@/lib/password'
 
 export async function getProfile(email: string) {
   const user = await prisma.user.findUnique({
     where: { email },
-    include: {
+    select: {
+      id: true,
+      email: true,
+      role: true,
+      createdAt: true,
+      updatedAt: true,
       employee: true
     }
   })
@@ -22,7 +28,7 @@ export async function updateProfile(userId: string, data: any) {
   if (password && password.trim() !== '') {
     await prisma.user.update({
       where: { id: userId },
-      data: { password }
+      data: { password: await hashPassword(password) }
     })
   }
 

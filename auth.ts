@@ -2,6 +2,7 @@ import NextAuth from 'next-auth'
 import { authConfig } from './auth.config'
 import Credentials from 'next-auth/providers/credentials'
 import { prisma } from '@/lib/prisma'
+import { verifyPassword, hashPassword, isHashed } from '@/lib/password'
 
 export const { auth, signIn, signOut, handlers } = NextAuth({
   ...authConfig,
@@ -22,18 +23,22 @@ export const { auth, signIn, signOut, handlers } = NextAuth({
 
         if (!user) return null
 
-        // Verificación simple temporal (en producción usar bcrypt)
-        if (credentials.password === user.password) {
-          return { 
-            id: user.id, 
-            email: user.email, 
-            name: user.employee?.nombre || null,
-            role: user.role, 
-            employeeId: user.employee?.id || null 
-          } as any
+        const isValid = await verifyPassword(credentials.password as string, user.password)
+        if (!isValid) return null
+
+        // Migración transparente: si la contraseña todavía estaba en texto plano, se re-guarda con hash
+        if (!isHashed(user.password)) {
+          const hashed = await hashPassword(credentials.password as string)
+          await prisma.user.update({ where: { id: user.id }, data: { password: hashed } }).catch(() => {})
         }
 
-        return null
+        return {
+          id: user.id,
+          email: user.email,
+          name: user.employee?.nombre || null,
+          role: user.role,
+          employeeId: user.employee?.id || null
+        } as any
       }
     })
   ]
