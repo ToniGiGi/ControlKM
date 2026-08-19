@@ -1,14 +1,14 @@
 import { EmployeeList } from '@/components/employees/employee-list'
 import { getEmployees, getVehicles, getBranches, getDepartments } from '@/app/actions/db'
 
-export const dynamic = 'force-dynamic'
-
 export default async function EmpleadosPage() {
-  const employees = await getEmployees()
-  const vehicles = await getVehicles()
-  const branches = await getBranches()
-  const departments = await getDepartments()
-  
+  const [employees, vehicles, branches, departments] = await Promise.all([
+    getEmployees(),
+    getVehicles(),
+    getBranches(),
+    getDepartments(),
+  ])
+
   return <EmployeeList 
     initialEmployees={employees} 
     initialVehicles={vehicles} 

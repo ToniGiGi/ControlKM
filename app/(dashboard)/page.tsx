@@ -1,7 +1,3 @@
-'use client'
-
-import React from 'react'
-
 import Link from 'next/link'
 import {
   Truck,
@@ -14,25 +10,16 @@ import {
   TriangleAlert,
   ArrowUpRight,
   ShieldCheck,
-  Loader2,
 } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
 import { KpiCard } from '@/components/dashboard/kpi-card'
 import { ExpenseTrendChart, CategoryDonut } from '@/components/dashboard/charts'
 import { VehicleStatusBadge, TelemetryBadge } from '@/components/status-badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { CustomLoader } from '@/components/ui/custom-loader'
 import { Badge } from '@/components/ui/badge'
-import { useRole } from '@/components/role-provider'
+import { auth } from '@/auth'
 import { getVehicles, getAlerts, getMonthlyExpenses } from '@/app/actions/db'
-import {
-  alerts,
-  currency,
-  numberFmt,
-  totalGastos,
-  getEmployee,
-  type ExpenseCategory,
-} from '@/lib/mock-data'
+import { currency, numberFmt, totalGastos, getEmployee, type ExpenseCategory } from '@/lib/mock-data'
 
 const severidadStyles: Record<string, string> = {
   alta: 'bg-destructive/10 text-destructive border-destructive/20',
@@ -40,39 +27,24 @@ const severidadStyles: Record<string, string> = {
   baja: 'bg-muted text-muted-foreground border-border',
 }
 
-export default function DashboardPage() {
-  const { role, config } = useRole()
+export default async function DashboardPage() {
+  const session = await auth()
+  const role = (((session?.user as any)?.role as string)?.toLowerCase() || 'conductor') as
+    | 'super_admin'
+    | 'administrador'
+    | 'conductor'
   const isConductor = role === 'conductor'
+  const empleadoId = (session?.user as any)?.employeeId || ''
+  const nombre = session?.user?.name || session?.user?.email?.split('@')[0] || 'Usuario'
+  const label = role === 'super_admin' ? 'Super Admin' : role === 'administrador' ? 'Administrador' : 'Conductor'
 
-  const [vehicles, setVehicles] = React.useState<any[]>([])
-  const [dynamicAlerts, setDynamicAlerts] = React.useState<any[]>([])
-  const [monthlyExpensesData, setMonthlyExpensesData] = React.useState<any[]>([])
-  const [isLoading, setIsLoading] = React.useState(true)
+  const [vehicles, visibleAlerts, monthlyExpensesData]: [any[], any[], any[]] = await Promise.all([
+    getVehicles(),
+    getAlerts(isConductor ? empleadoId : undefined),
+    getMonthlyExpenses(isConductor ? empleadoId : undefined),
+  ])
 
-  React.useEffect(() => {
-    setIsLoading(true)
-    Promise.all([
-      getVehicles(),
-      getAlerts(),
-      getMonthlyExpenses(role === 'conductor' ? config.empleadoId : undefined)
-    ]).then(([v, a, m]) => {
-      setVehicles(v)
-      setDynamicAlerts(a)
-      setMonthlyExpensesData(m)
-      setIsLoading(false)
-    }).catch(() => {
-      setIsLoading(false)
-    })
-  }, [role, config.empleadoId])
-
-  const visibles = isConductor
-    ? vehicles.filter((v) => v.empleadoId === config.empleadoId)
-    : vehicles
-
-  const visibleIds = new Set(visibles.map((v) => v.id))
-  const visibleAlerts = isConductor
-    ? dynamicAlerts.filter((a) => visibleIds.has(a.vehiculoId))
-    : dynamicAlerts
+  const visibles = isConductor ? vehicles.filter((v) => v.empleadoId === empleadoId) : vehicles
 
   const activos = visibles.filter((v) => v.estado === 'activo').length
   const enMantenimiento = visibles.filter((v) => v.estado === 'mantenimiento').length
@@ -106,21 +78,8 @@ export default function DashboardPage() {
 
   return (
     <div className="flex-1 space-y-6 p-4 md:p-8 pt-6 max-w-screen-2xl mx-auto w-full relative">
-      
-      {/* Overlay de Carga */}
-      {isLoading && (
-        <div className="absolute inset-0 z-50 bg-background/80 backdrop-blur-sm rounded-xl">
-          <div className="sticky top-0 w-full min-h-[70vh] flex flex-col items-center justify-center">
-            <CustomLoader 
-              title="Cargando métricas..." 
-              description="Calculando gastos y alertas de tu flotilla" 
-            />
-          </div>
-        </div>
-      )}
-
       <PageHeader
-        title={isConductor ? `Hola, ${config.nombre}` : 'Dashboard general'}
+        title={isConductor ? `Hola, ${nombre}` : 'Dashboard general'}
         description={
           isConductor
             ? 'Resumen de tu vehículo asignado y tus movimientos recientes.'
@@ -129,7 +88,7 @@ export default function DashboardPage() {
       >
         <Badge variant="secondary" className="gap-1.5">
           <span className="size-2 rounded-full bg-primary" />
-          {config.label}
+          {label}
         </Badge>
       </PageHeader>
 
