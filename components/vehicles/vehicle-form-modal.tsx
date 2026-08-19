@@ -6,9 +6,10 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Car, ImagePlus, Activity, MapPin, Hash, Palette, Fuel, PenTool } from 'lucide-react'
+import { Car, ImagePlus, Activity, MapPin, Hash, Palette, Fuel, PenTool, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { type Vehicle, type VehicleStatus } from '@/lib/mock-data'
+import { uploadImage } from '@/app/actions/upload'
 
 type VehicleFormModalProps = {
   isOpen: boolean
@@ -29,6 +30,7 @@ const combustibles = [
 export function VehicleFormModal({ isOpen, onClose, onSave, vehicle, sucursales }: VehicleFormModalProps) {
   const isEditing = !!vehicle
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [uploadingFoto, setUploadingFoto] = useState(false)
 
   const [formData, setFormData] = useState<Partial<Vehicle>>({
     nombreInterno: '',
@@ -41,7 +43,7 @@ export function VehicleFormModal({ isOpen, onClose, onSave, vehicle, sucursales 
     numeroEconomico: '',
     tipoUnidad: '',
     combustible: '',
-    sucursal: '',
+    sucursalId: '',
     estado: 'activo',
     fotoUrl: '',
     // Valores por defecto que no se llenan en este form inicial
@@ -67,7 +69,7 @@ export function VehicleFormModal({ isOpen, onClose, onSave, vehicle, sucursales 
         numeroEconomico: '',
         tipoUnidad: '',
         combustible: '',
-        sucursal: '',
+        sucursalId: '',
         estado: 'activo',
         fotoUrl: '',
         capacidadTanque: 50,
@@ -88,19 +90,31 @@ export function VehicleFormModal({ isOpen, onClose, onSave, vehicle, sucursales 
     onSave(formData)
   }
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (file) {
-      if (file.size > 300 * 1024) {
-        toast.error('La imagen pesa demasiado. El tamaño máximo permitido es de 300 KB.')
-        e.target.value = ''
-        return
-      }
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        handleChange('fotoUrl', reader.result as string)
-      }
-      reader.readAsDataURL(file)
+    if (!file) return
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('La imagen pesa demasiado. El tamaño máximo permitido es de 5 MB.')
+      e.target.value = ''
+      return
+    }
+
+    const previewUrl = URL.createObjectURL(file)
+    handleChange('fotoUrl', previewUrl)
+    setUploadingFoto(true)
+
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const url = await uploadImage(fd, 'vehiculos')
+      handleChange('fotoUrl', url)
+    } catch {
+      toast.error('No se pudo subir la fotografía. Intenta de nuevo.')
+      handleChange('fotoUrl', vehicle?.fotoUrl || '')
+    } finally {
+      setUploadingFoto(false)
+      URL.revokeObjectURL(previewUrl)
     }
   }
 
@@ -191,13 +205,13 @@ export function VehicleFormModal({ isOpen, onClose, onSave, vehicle, sucursales 
 
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5"><MapPin className="size-3.5" /> Sucursal Asignada</label>
-              <Select value={formData.sucursal || ''} onValueChange={(val) => handleChange('sucursal', val)}>
+              <Select value={formData.sucursalId || ''} onValueChange={(val) => handleChange('sucursalId', val)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Seleccione la sucursal" />
                 </SelectTrigger>
                 <SelectContent>
                   {sucursales.map(s => (
-                    <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>
+                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -252,16 +266,21 @@ export function VehicleFormModal({ isOpen, onClose, onSave, vehicle, sucursales 
                     <span className="text-xs font-medium">Agregar foto</span>
                   </div>
                 )}
+                {uploadingFoto && (
+                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                    <Loader2 className="size-6 text-white animate-spin" />
+                  </div>
+                )}
               </div>
-              <Button type="button" variant="outline" size="sm" className="w-full" onClick={triggerFileInput}>
-                Subir fotografía
+              <Button type="button" variant="outline" size="sm" className="w-full" onClick={triggerFileInput} disabled={uploadingFoto}>
+                {uploadingFoto ? 'Subiendo...' : 'Subir fotografía'}
               </Button>
             </div>
           </div>
 
           <DialogFooter className="mt-8 sm:justify-center border-t border-border pt-6 gap-3">
             <Button type="button" variant="outline" onClick={onClose} className="min-w-[120px]">Cancelar</Button>
-            <Button type="submit" className="min-w-[120px]">{isEditing ? 'Guardar cambios' : 'Crear Vehículo'}</Button>
+            <Button type="submit" className="min-w-[120px]" disabled={uploadingFoto}>{isEditing ? 'Guardar cambios' : 'Crear Vehículo'}</Button>
           </DialogFooter>
         </form>
       </DialogContent>

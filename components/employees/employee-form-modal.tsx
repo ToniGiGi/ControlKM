@@ -6,9 +6,10 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { ImagePlus, User, Mail, Lock, Phone, Briefcase, MapPin, Building, Activity } from 'lucide-react'
+import { ImagePlus, User, Mail, Lock, Phone, Briefcase, MapPin, Building, Activity, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { type Employee } from '@/lib/mock-data'
+import { uploadImage } from '@/app/actions/upload'
 
 type EmployeeFormModalProps = {
   isOpen: boolean
@@ -22,6 +23,7 @@ type EmployeeFormModalProps = {
 export function EmployeeFormModal({ isOpen, onClose, onSave, employee, sucursales, areas }: EmployeeFormModalProps) {
   const isEditing = !!employee
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [uploadingFoto, setUploadingFoto] = useState(false)
 
   const [formData, setFormData] = useState<Partial<Employee>>({
     nombre: '',
@@ -29,8 +31,8 @@ export function EmployeeFormModal({ isOpen, onClose, onSave, employee, sucursale
     password: '',
     telefono: '',
     puesto: '',
-    area: '',
-    sucursal: '',
+    departamentoId: '',
+    sucursalId: '',
     estado: 'activo',
     fotoUrl: '',
     vehiculosAsignados: [],
@@ -68,19 +70,31 @@ export function EmployeeFormModal({ isOpen, onClose, onSave, employee, sucursale
     onSave(formData)
   }
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (file) {
-      if (file.size > 300 * 1024) {
-        toast.error('La imagen pesa demasiado. El tamaño máximo permitido es de 300 KB.')
-        e.target.value = ''
-        return
-      }
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        handleChange('fotoUrl', reader.result as string)
-      }
-      reader.readAsDataURL(file)
+    if (!file) return
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('La imagen pesa demasiado. El tamaño máximo permitido es de 5 MB.')
+      e.target.value = ''
+      return
+    }
+
+    const previewUrl = URL.createObjectURL(file)
+    handleChange('fotoUrl', previewUrl)
+    setUploadingFoto(true)
+
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const url = await uploadImage(fd, 'empleados')
+      handleChange('fotoUrl', url)
+    } catch {
+      toast.error('No se pudo subir la fotografía. Intenta de nuevo.')
+      handleChange('fotoUrl', employee?.fotoUrl || '')
+    } finally {
+      setUploadingFoto(false)
+      URL.revokeObjectURL(previewUrl)
     }
   }
 
@@ -108,14 +122,21 @@ export function EmployeeFormModal({ isOpen, onClose, onSave, employee, sucursale
                 accept="image/*" 
                 className="hidden" 
               />
-              <Avatar className="size-32 cursor-pointer hover:opacity-80 transition-opacity border-2 border-border shadow-sm" onClick={triggerFileInput}>
-                <AvatarImage src={formData.fotoUrl || undefined} className="object-cover" />
-                <AvatarFallback className="bg-muted text-muted-foreground flex flex-col gap-2">
-                  <ImagePlus className="size-8" />
-                </AvatarFallback>
-              </Avatar>
-              <Button type="button" variant="outline" size="sm" className="w-full text-xs" onClick={triggerFileInput}>
-                Subir fotografía
+              <div className="relative">
+                <Avatar className="size-32 cursor-pointer hover:opacity-80 transition-opacity border-2 border-border shadow-sm" onClick={triggerFileInput}>
+                  <AvatarImage src={formData.fotoUrl || undefined} className="object-cover" />
+                  <AvatarFallback className="bg-muted text-muted-foreground flex flex-col gap-2">
+                    <ImagePlus className="size-8" />
+                  </AvatarFallback>
+                </Avatar>
+                {uploadingFoto && (
+                  <div className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center">
+                    <Loader2 className="size-6 text-white animate-spin" />
+                  </div>
+                )}
+              </div>
+              <Button type="button" variant="outline" size="sm" className="w-full text-xs" onClick={triggerFileInput} disabled={uploadingFoto}>
+                {uploadingFoto ? 'Subiendo...' : 'Subir fotografía'}
               </Button>
             </div>
 
@@ -143,13 +164,13 @@ export function EmployeeFormModal({ isOpen, onClose, onSave, employee, sucursale
 
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5"><Building className="size-3.5" /> Área</label>
-                <Select required value={formData.area || ''} onValueChange={(val) => handleChange('area', val)}>
+                <Select required value={formData.departamentoId || ''} onValueChange={(val) => handleChange('departamentoId', val)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Selecciona el Área" />
                   </SelectTrigger>
                   <SelectContent>
                     {areas.map(a => (
-                      <SelectItem key={a.id} value={a.name}>{a.name}</SelectItem>
+                      <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -157,13 +178,13 @@ export function EmployeeFormModal({ isOpen, onClose, onSave, employee, sucursale
 
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5"><MapPin className="size-3.5" /> Sucursal</label>
-                <Select required value={formData.sucursal || ''} onValueChange={(val) => handleChange('sucursal', val)}>
+                <Select required value={formData.sucursalId || ''} onValueChange={(val) => handleChange('sucursalId', val)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Selecciona sucursal" />
                   </SelectTrigger>
                   <SelectContent>
                     {sucursales.map(s => (
-                      <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>
+                      <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -188,7 +209,7 @@ export function EmployeeFormModal({ isOpen, onClose, onSave, employee, sucursale
 
           <DialogFooter className="mt-6">
             <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
-            <Button type="submit">{isEditing ? 'Guardar cambios' : 'Crear Empleado'}</Button>
+            <Button type="submit" disabled={uploadingFoto}>{isEditing ? 'Guardar cambios' : 'Crear Empleado'}</Button>
           </DialogFooter>
         </form>
       </DialogContent>
