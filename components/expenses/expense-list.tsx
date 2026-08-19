@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Plus, Search, Calendar, DollarSign, Receipt, LayoutGrid, List, FileText, Pencil, Car, PenToolIcon as Tool, Wrench, Droplet, Disc, Ticket, ShieldAlert, CircleEllipsis, Trash2, CheckCircle, XCircle } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -20,6 +20,9 @@ import {
 import { ExpenseFormModal } from './expense-form-modal'
 import { createExpense, updateExpense, deleteExpense, approveExpense, rejectExpense } from '@/app/actions/db'
 import { useRole } from '@/components/role-provider'
+import { ListPagination } from '@/components/ui/list-pagination'
+
+const PAGE_SIZE = 12
 
 type ExpenseListProps = {
   initialExpenses: any[]
@@ -48,7 +51,8 @@ export function ExpenseList({ initialExpenses, vehicles }: ExpenseListProps) {
   const [categoria, setCategoria] = useState('todas')
   const [estado, setEstado] = useState('todas')
   const [view, setView] = useState<'grid' | 'table'>('grid')
-  
+  const [page, setPage] = useState(1)
+
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [editingExpense, setEditingExpense] = useState<any | null>(null)
 
@@ -119,6 +123,14 @@ export function ExpenseList({ initialExpenses, vehicles }: ExpenseListProps) {
       return matchQ && matchCat && matchEstado
     })
   }, [expenses, query, categoria, estado, vehicles])
+
+  useEffect(() => { setPage(1) }, [query, categoria, estado])
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const paginated = useMemo(
+    () => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [filtered, page]
+  )
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('es-MX', {
@@ -216,7 +228,7 @@ export function ExpenseList({ initialExpenses, vehicles }: ExpenseListProps) {
 
       {view === 'grid' && filtered.length > 0 && (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          {filtered.map((m) => {
+          {paginated.map((m) => {
             const estadoActual = m.estado || 'PENDIENTE'
             const isPending = estadoActual === 'PENDIENTE'
             const isApproved = estadoActual === 'APROBADA'
@@ -365,7 +377,7 @@ export function ExpenseList({ initialExpenses, vehicles }: ExpenseListProps) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((m) => (
+                {paginated.map((m) => (
                   <TableRow key={m.id}>
                     <TableCell>
                       <div className="font-medium">{m.vehiculo?.nombreInterno}</div>
@@ -427,6 +439,8 @@ export function ExpenseList({ initialExpenses, vehicles }: ExpenseListProps) {
           </div>
         </Card>
       )}
+
+      <ListPagination page={page} totalPages={totalPages} onPageChange={setPage} totalItems={filtered.length} pageSize={PAGE_SIZE} />
 
       {isFormOpen && (
         <ExpenseFormModal

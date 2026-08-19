@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Plus, Search, ShieldAlert, Calendar, Banknote, Car, Pencil, FileText, LayoutGrid, List, Trash2 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -21,6 +21,9 @@ import {
 import { InsuranceFormModal } from './insurance-form-modal'
 import { createInsurance, updateInsurance, deleteInsurance } from '@/app/actions/db'
 import { useRole } from '@/components/role-provider'
+import { ListPagination } from '@/components/ui/list-pagination'
+
+const PAGE_SIZE = 12
 
 type InsuranceListProps = {
   initialInsurances: any[]
@@ -71,7 +74,8 @@ export function InsuranceList({ initialInsurances, vehicles, insuranceCompanies 
   const [query, setQuery] = useState('')
   const [estado, setEstado] = useState('todos')
   const [view, setView] = useState<'grid' | 'table'>('grid')
-  
+  const [page, setPage] = useState(1)
+
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [editingInsurance, setEditingInsurance] = useState<any | null>(null)
 
@@ -165,6 +169,14 @@ export function InsuranceList({ initialInsurances, vehicles, insuranceCompanies 
     return filtered
   }, [insurances, query, estado, isConductor, config.empleadoId, vehicles])
 
+  useEffect(() => { setPage(1) }, [query, estado])
+
+  const totalPages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE))
+  const paginated = useMemo(
+    () => visible.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [visible, page]
+  )
+
   return (
     <div className="flex-1 space-y-6 p-4 md:p-8 pt-6 max-w-screen-2xl mx-auto w-full">
       <PageHeader
@@ -228,7 +240,7 @@ export function InsuranceList({ initialInsurances, vehicles, insuranceCompanies 
       {/* Grid de Pólizas */}
       {view === 'grid' && visible.length > 0 && (
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2 p-1">
-        {visible.map((ins) => {
+        {paginated.map((ins) => {
           const { diffDays, percentage, status, progressColor, badgeColor } = getExpirationData(ins.vencimiento)
           
           return (
@@ -348,7 +360,7 @@ export function InsuranceList({ initialInsurances, vehicles, insuranceCompanies 
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {visible.map((ins) => {
+                {paginated.map((ins) => {
                   const { diffDays, status, badgeColor } = getExpirationData(ins.vencimiento)
                   return (
                     <TableRow key={ins.id}>
@@ -450,6 +462,8 @@ export function InsuranceList({ initialInsurances, vehicles, insuranceCompanies 
           <p>No se encontraron pólizas de seguro.</p>
         </div>
       )}
+
+      <ListPagination page={page} totalPages={totalPages} onPageChange={setPage} totalItems={visible.length} pageSize={PAGE_SIZE} />
 
       {isFormOpen && (
         <InsuranceFormModal

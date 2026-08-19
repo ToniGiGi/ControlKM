@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Search, Calendar, LayoutGrid, List, MapPin, Navigation, CarFront, User, Map, Fuel, DollarSign, Route } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -16,6 +16,9 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { ListPagination } from '@/components/ui/list-pagination'
+
+const PAGE_SIZE = 12
 
 type TripListProps = {
   initialTrips: any[]
@@ -26,6 +29,7 @@ export function TripList({ initialTrips }: TripListProps) {
   const [view, setView] = useState<'grid' | 'table'>('grid')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
+  const [page, setPage] = useState(1)
 
   const filtered = useMemo(() => {
     return initialTrips.filter((m) => {
@@ -57,6 +61,14 @@ export function TripList({ initialTrips }: TripListProps) {
       return matchQ && matchDate
     })
   }, [initialTrips, query, startDate, endDate])
+
+  useEffect(() => { setPage(1) }, [query, startDate, endDate])
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const paginated = useMemo(
+    () => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [filtered, page]
+  )
 
   const formatCurrency = (val: number | null | undefined) => {
     if (val === null || val === undefined) return '-'
@@ -150,7 +162,7 @@ export function TripList({ initialTrips }: TripListProps) {
 
       {view === 'grid' && filtered.length > 0 && (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          {filtered.map((m) => {
+          {paginated.map((m) => {
             const isRedondo = m.rutas.toLowerCase().includes('redondo');
             
             return (
@@ -261,7 +273,7 @@ export function TripList({ initialTrips }: TripListProps) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((m) => (
+                {paginated.map((m) => (
                   <TableRow key={m.id}>
                     <TableCell className="whitespace-nowrap text-muted-foreground">
                       {formatDate(m.fechaSolicitud)}
@@ -289,6 +301,8 @@ export function TripList({ initialTrips }: TripListProps) {
           </div>
         </Card>
       )}
+
+      <ListPagination page={page} totalPages={totalPages} onPageChange={setPage} totalItems={filtered.length} pageSize={PAGE_SIZE} />
     </div>
   )
 }

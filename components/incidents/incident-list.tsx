@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Plus, Search, Calendar, DollarSign, LayoutGrid, List, FileText, Pencil, TriangleAlert, ShieldAlert, CarFront, Settings2, ShieldCheck, Siren } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -19,6 +19,9 @@ import {
 } from '@/components/ui/table'
 import { IncidentFormModal } from './incident-form-modal'
 import { createIncident, updateIncident, deleteIncident } from '@/app/actions/db'
+import { ListPagination } from '@/components/ui/list-pagination'
+
+const PAGE_SIZE = 12
 
 type IncidentListProps = {
   initialIncidents: any[]
@@ -60,7 +63,8 @@ export function IncidentList({ initialIncidents, vehicles }: IncidentListProps) 
   const [estado, setEstado] = useState('todos')
   const [gravedad, setGravedad] = useState('todas')
   const [view, setView] = useState<'grid' | 'table'>('grid')
-  
+  const [page, setPage] = useState(1)
+
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [editingIncident, setEditingIncident] = useState<any | null>(null)
 
@@ -108,6 +112,14 @@ export function IncidentList({ initialIncidents, vehicles }: IncidentListProps) 
       return matchQ && matchStatus && matchSeverity
     })
   }, [incidents, query, estado, gravedad, vehicles])
+
+  useEffect(() => { setPage(1) }, [query, estado, gravedad])
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const paginated = useMemo(
+    () => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [filtered, page]
+  )
 
   const formatCurrency = (val: number | null | undefined) => {
     if (val === null || val === undefined) return '-'
@@ -201,7 +213,7 @@ export function IncidentList({ initialIncidents, vehicles }: IncidentListProps) 
 
       {view === 'grid' && filtered.length > 0 && (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          {filtered.map((m) => (
+          {paginated.map((m) => (
             <Card key={m.id} className="flex flex-col relative overflow-hidden transition-all hover:shadow-md">
               <CardHeader className="flex flex-row items-start justify-between pb-2">
                 <div className="space-y-1">
@@ -296,7 +308,7 @@ export function IncidentList({ initialIncidents, vehicles }: IncidentListProps) 
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((m) => (
+                {paginated.map((m) => (
                   <TableRow key={m.id}>
                     <TableCell>
                       <div className="font-medium">{m.vehiculo?.nombreInterno}</div>
@@ -336,6 +348,8 @@ export function IncidentList({ initialIncidents, vehicles }: IncidentListProps) 
           </div>
         </Card>
       )}
+
+      <ListPagination page={page} totalPages={totalPages} onPageChange={setPage} totalItems={filtered.length} pageSize={PAGE_SIZE} />
 
       {isFormOpen && (
         <IncidentFormModal

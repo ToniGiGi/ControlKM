@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Plus, Search, Fuel, CreditCard, Banknote, Map, CheckCircle, XCircle, FileDown, Trash2 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -13,6 +13,9 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { FuelPdfDocument } from './fuel-pdf-document'
 import { approveFuelRequest, rejectFuelRequest, deleteFuelRequest } from '@/app/actions/db'
 import { useRole } from '@/components/role-provider'
+import { ListPagination } from '@/components/ui/list-pagination'
+
+const PAGE_SIZE = 12
 
 type FuelRequestListProps = {
   initialRequests: any[]
@@ -21,11 +24,12 @@ type FuelRequestListProps = {
 export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListProps) {
   const { role, config } = useRole()
   const isConductor = role === 'conductor'
-  
+
   const [requests, setRequests] = useState(initialRequests)
   const [query, setQuery] = useState('')
   const [estado, setEstado] = useState('todos')
-  
+  const [page, setPage] = useState(1)
+
   const [pdfData, setPdfData] = useState<any | null>(null)
 
   const handleApprove = async (id: string) => {
@@ -81,6 +85,14 @@ export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListPr
       return matchQ && matchEstado
     })
   }, [requests, query, estado, vehicles])
+
+  useEffect(() => { setPage(1) }, [query, estado])
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const paginated = useMemo(
+    () => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [filtered, page]
+  )
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('es-MX', {
@@ -149,7 +161,7 @@ export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListPr
 
       {filtered.length > 0 && (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          {filtered.map((r) => {
+          {paginated.map((r) => {
             const isPending = r.estado === 'PENDIENTE'
             const isApproved = r.estado === 'APROBADA'
             const badgeClass = isApproved 
@@ -264,6 +276,8 @@ export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListPr
           })}
         </div>
       )}
+
+      <ListPagination page={page} totalPages={totalPages} onPageChange={setPage} totalItems={filtered.length} pageSize={PAGE_SIZE} />
     </div>
   )
 }
