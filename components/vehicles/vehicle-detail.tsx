@@ -53,6 +53,7 @@ import { KpiCard } from '@/components/dashboard/kpi-card'
 import { VehicleMonthlyChart } from '@/components/vehicles/vehicle-charts'
 import { VehicleStatusBadge, TelemetryBadge, InsuranceBadge } from '@/components/status-badge'
 import { useRole } from '@/components/role-provider'
+import { updateVehicle } from '@/app/actions/db'
 import {
   employees as allEmployees,
   currency,
@@ -113,6 +114,7 @@ export function VehicleDetail({ id, initialVehicle, employees = [] }: { id: stri
   const [vehicle, setVehicle] = useState<any | undefined>(initialVehicle)
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false)
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('')
+  const [isAssigning, setIsAssigning] = useState(false)
   const [selectedDocument, setSelectedDocument] = useState<any | null>(null)
 
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>, tipo: string) => {
@@ -768,17 +770,32 @@ export function VehicleDetail({ id, initialVehicle, employees = [] }: { id: stri
               Cancelar
             </Button>
             <Button
-              onClick={() => {
-                const isAssigning = selectedEmployeeId !== 'unassigned'
-                setVehicle({
-                  ...vehicle,
-                  empleadoId: isAssigning ? selectedEmployeeId : undefined,
-                  fechaAsignacion: isAssigning ? new Date().toISOString().split('T')[0] : undefined,
-                })
-                setIsAssignModalOpen(false)
+              disabled={isAssigning}
+              onClick={async () => {
+                const willAssign = selectedEmployeeId !== 'unassigned'
+                const empleadoId = willAssign ? selectedEmployeeId : null
+                const fechaAsignacion = willAssign ? new Date().toISOString().split('T')[0] : null
+
+                setIsAssigning(true)
+                try {
+                  await updateVehicle(vehicle.id, { empleadoId, fechaAsignacion })
+                  const nuevoEmpleado = employees.find((e) => e.id === empleadoId)
+                  setVehicle({
+                    ...vehicle,
+                    empleadoId,
+                    fechaAsignacion,
+                    empleado: nuevoEmpleado || null,
+                  })
+                  setIsAssignModalOpen(false)
+                } catch (err) {
+                  console.error(err)
+                  alert('Error al guardar la asignación')
+                } finally {
+                  setIsAssigning(false)
+                }
               }}
             >
-              Guardar asignación
+              {isAssigning ? 'Guardando...' : 'Guardar asignación'}
             </Button>
           </DialogFooter>
         </DialogContent>
