@@ -19,19 +19,20 @@ const GAS_PRICES = {
 
 type FuelRequestFormProps = {
   vehicles: any[]
+  departments: any[]
 }
 
-export function FuelRequestForm({ vehicles }: FuelRequestFormProps) {
+export function FuelRequestForm({ vehicles, departments }: FuelRequestFormProps) {
   const router = useRouter()
   const { role, config } = useRole()
-  
-  const selectableVehicles = role === 'conductor' 
+
+  const selectableVehicles = role === 'conductor'
     ? vehicles.filter(v => v.empleadoId === config.empleadoId)
     : vehicles
 
   // Datos Generales
   const [solicitanteNombre, setSolicitanteNombre] = useState(role === 'conductor' ? config.nombre : '')
-  const [departamento, setDepartamento] = useState('')
+  const [departamentoId, setDepartamentoId] = useState('')
   const [area, setArea] = useState('')
   const [vehiculoId, setVehiculoId] = useState(selectableVehicles.length === 1 ? selectableVehicles[0].id : '')
   const [motivo, setMotivo] = useState('')
@@ -175,7 +176,7 @@ export function FuelRequestForm({ vehicles }: FuelRequestFormProps) {
       await createFuelRequest({
         vehiculoId,
         solicitanteNombre,
-        departamento,
+        departamentoId,
         area,
         motivo,
         tarjetaToka,
@@ -230,14 +231,12 @@ export function FuelRequestForm({ vehicles }: FuelRequestFormProps) {
               </div>
               <div className="space-y-2">
                 <Label>Departamento <span className="text-destructive">*</span></Label>
-                <Select value={departamento} onValueChange={(v) => setDepartamento(v || "")} required>
+                <Select value={departamentoId} onValueChange={(v) => setDepartamentoId(v || "")} required>
                   <SelectTrigger><SelectValue placeholder="Selecciona el departamento" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Dirección">Dirección</SelectItem>
-                    <SelectItem value="Comercial">Comercial</SelectItem>
-                    <SelectItem value="Ingeniería">Ingeniería</SelectItem>
-                    <SelectItem value="Logística">Logística</SelectItem>
-                    <SelectItem value="Operaciones">Operaciones</SelectItem>
+                    {departments.map(d => (
+                      <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

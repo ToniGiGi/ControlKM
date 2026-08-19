@@ -1,4 +1,4 @@
-import { getVehicles } from '@/app/actions/db'
+import { getVehicles, getDepartments } from '@/app/actions/db'
 import { FuelRequestForm } from '@/components/fuel/fuel-request-form'
 import { PageHeader } from '@/components/page-header'
 import { Button } from '@/components/ui/button'
@@ -6,7 +6,10 @@ import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 
 export default async function NuevaSolicitudCombustiblePage() {
-  const vehicles = await getVehicles()
+  const [vehicles, departments] = await Promise.all([
+    getVehicles(),
+    getDepartments(),
+  ])
 
   return (
     <div className="flex-1 space-y-6 p-4 md:p-8 pt-6 max-w-screen-xl mx-auto w-full">
@@ -22,7 +25,7 @@ export default async function NuevaSolicitudCombustiblePage() {
         />
       </div>
 
-      <FuelRequestForm vehicles={vehicles} />
+      <FuelRequestForm vehicles={vehicles} departments={departments} />
     </div>
   )
 }

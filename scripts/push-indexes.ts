@@ -48,6 +48,14 @@ async function main() {
     // FuelRequest indexes
     'CREATE INDEX IF NOT EXISTS "FuelRequest_vehiculoId_idx" ON "FuelRequest"("vehiculoId")',
     'CREATE INDEX IF NOT EXISTS "FuelRequest_estado_idx" ON "FuelRequest"("estado")',
+
+    // --- Added: indexes matching actual query patterns (orderBy / getAlerts filters) ---
+    'CREATE INDEX IF NOT EXISTS "Employee_createdAt_idx" ON "Employee"("createdAt")',
+    'CREATE INDEX IF NOT EXISTS "Vehicle_orden_idx" ON "Vehicle"("orden")',
+    'CREATE INDEX IF NOT EXISTS "Maintenance_estado_createdAt_idx" ON "Maintenance"("estado", "createdAt")',
+    'CREATE INDEX IF NOT EXISTS "Incident_estado_createdAt_idx" ON "Incident"("estado", "createdAt")',
+    'CREATE INDEX IF NOT EXISTS "Expense_estado_createdAt_idx" ON "Expense"("estado", "createdAt")',
+    'CREATE INDEX IF NOT EXISTS "FuelRequest_estado_createdAt_idx" ON "FuelRequest"("estado", "createdAt")',
   ]
 
   console.log(`Pushing ${indexes.length} indexes to Turso...`)

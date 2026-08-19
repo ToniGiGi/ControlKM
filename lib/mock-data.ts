@@ -78,6 +78,7 @@ export interface Vehicle {
   empleadoId: string | null
   fechaAsignacion: string
   sucursal: string
+  sucursalId?: string | null
   seguro: {
     aseguradora: string
     poliza: string
@@ -114,6 +115,8 @@ export interface Employee {
   puesto: string
   area: string
   sucursal: string
+  sucursalId?: string | null
+  departamentoId?: string | null
   licencia: string
   vencimientoLicencia: string
   estado: 'activo' | 'inactivo'
