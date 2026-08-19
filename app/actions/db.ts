@@ -2,6 +2,7 @@
 
 import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
+import { hashPassword } from '@/lib/password'
 
 export async function getVehicles() {
   // Optimized: 4 parallel queries instead of 8 JOINs
@@ -14,6 +15,7 @@ export async function getVehicles() {
       include: {
         empleado: { select: { id: true, nombre: true, email: true, telefono: true, puesto: true, fotoUrl: true } },
         seguros: { orderBy: { vencimiento: 'desc' }, take: 1 },
+        sucursalRef: { select: { id: true, name: true } },
       }
     }),
     prisma.expense.findMany({
@@ -92,7 +94,9 @@ export async function getVehicles() {
       estado: v.estado.toLowerCase(),
       seguro: v.seguros && v.seguros[0] ? { ...v.seguros[0], estado: v.seguros[0].estado.toLowerCase() } : { estado: 'vencido' },
       gastos: gastosMapped,
-      telemetria
+      telemetria,
+      // Compatibilidad: sucursal como texto viene de la relación normalizada, con el string viejo como respaldo
+      sucursal: v.sucursalRef?.name || v.sucursal,
     }
   })
 }
@@ -101,21 +105,26 @@ export async function getEmployees() {
   const dbEmployees = await prisma.employee.findMany({
     orderBy: { createdAt: 'desc' },
     include: {
-      vehiculosAsignados: true
+      vehiculosAsignados: true,
+      sucursalRef: { select: { id: true, name: true } },
+      departamentoRef: { select: { id: true, name: true } },
     }
   })
 
   return dbEmployees.map(e => ({
     ...e,
-    estado: e.estado.toLowerCase()
+    estado: e.estado.toLowerCase(),
+    // Compatibilidad: texto viene de la relación normalizada, con el string viejo como respaldo
+    sucursal: e.sucursalRef?.name || e.sucursal,
+    area: e.departamentoRef?.name || e.area,
   }))
 }
 
 function cleanVehicleData(data: any) {
   const allowedFields = [
-    'nombreInterno', 'marca', 'modelo', 'anio', 'tipoUnidad', 'placas', 
-    'vin', 'numeroEconomico', 'color', 'combustible', 'capacidadTanque', 
-    'kmInicial', 'kmActual', 'estado', 'fechaAsignacion', 'sucursal', 
+    'nombreInterno', 'marca', 'modelo', 'anio', 'tipoUnidad', 'placas',
+    'vin', 'numeroEconomico', 'color', 'combustible', 'capacidadTanque',
+    'kmInicial', 'kmActual', 'estado', 'fechaAsignacion', 'sucursalId',
     'proximoMantenimientoFecha', 'proximoMantenimientoKm', 'empleadoId', 'fotoUrl'
   ];
   
@@ -158,19 +167,21 @@ function cleanVehicleData(data: any) {
   if (clean.numeroEconomico === '') clean.numeroEconomico = null;
   if (clean.color === '') clean.color = null;
   if (clean.combustible === '') clean.combustible = null;
-  if (clean.sucursal === '') clean.sucursal = null;
+  if (!clean.sucursalId || clean.sucursalId === 'unassigned') clean.sucursalId = null;
 
   return clean;
 }
 
 function cleanEmployeeData(data: any) {
-  const { id, vehiculosAsignados, vehiculo, createdAt, updatedAt, password, user, ...rest } = data;
+  const { id, vehiculosAsignados, vehiculo, createdAt, updatedAt, password, user, sucursal, area, ...rest } = data;
   if (rest.estado) rest.estado = rest.estado.toUpperCase();
   if (rest.vencimientoLicencia) {
     rest.vencimientoLicencia = new Date(rest.vencimientoLicencia);
   } else {
     rest.vencimientoLicencia = null;
   }
+  if (!rest.sucursalId || rest.sucursalId === 'unassigned') rest.sucursalId = null;
+  if (!rest.departamentoId || rest.departamentoId === 'unassigned') rest.departamentoId = null;
   return rest;
 }
 
@@ -219,7 +230,7 @@ export async function createEmployee(data: any) {
     const user = await prisma.user.create({
       data: {
         email: rest.email,
-        password: password,
+        password: await hashPassword(password),
         role: 'CONDUCTOR',
         employee: { connect: { id: e.id } }
       }
@@ -237,14 +248,14 @@ export async function updateEmployee(id: string, data: any) {
   if (password && data.userId) {
      await prisma.user.update({
        where: { id: data.userId },
-       data: { password: password }
+       data: { password: await hashPassword(password) }
      })
   } else if (password && rest.email && !data.userId) {
     // Create the user if it didn't exist
     const user = await prisma.user.create({
       data: {
         email: rest.email,
-        password: password,
+        password: await hashPassword(password),
         role: 'CONDUCTOR',
       }
     });
@@ -271,8 +282,9 @@ function cleanInsuranceData(data: any) {
 export async function getInsurances() {
   return await prisma.insurance.findMany({
     orderBy: { vencimiento: 'asc' },
+    take: 1000,
     include: {
-      vehiculo: true
+      vehiculo: { select: { id: true, nombreInterno: true, placas: true, empleadoId: true } }
     }
   })
 }
@@ -315,6 +327,7 @@ function cleanMaintenanceData(data: any) {
 export async function getMaintenances() {
   return await prisma.maintenance.findMany({
     orderBy: { fecha: 'desc' },
+    take: 1000,
     include: {
       vehiculo: {
         select: { id: true, nombreInterno: true, placas: true, fotoUrl: true }
@@ -355,14 +368,42 @@ export async function approveMaintenance(id: string) {
 }
 
 export async function getFuelRequests() {
-  return await prisma.fuelRequest.findMany({
+  const requests = await prisma.fuelRequest.findMany({
     orderBy: { fechaSolicitud: 'desc' },
+    take: 1000,
     include: {
       vehiculo: {
         select: { id: true, nombreInterno: true, placas: true, fotoUrl: true, empleadoId: true }
-      }
+      },
+      departamentoRef: { select: { id: true, name: true } },
     }
   })
+
+  return requests.map(r => ({
+    ...r,
+    // Compatibilidad: texto viene de la relación normalizada, con el string viejo como respaldo
+    departamento: r.departamentoRef?.name || r.departamento,
+  }))
+}
+
+function cleanFuelRequestData(data: any) {
+  const { id, vehiculo, createdAt, updatedAt, ...rest } = data;
+
+  const numericFields = [
+    'kmAproximado', 'kmHolgura', 'rendimiento', 'precioGasolina',
+    'litrosSolicitados', 'costoGasolina', 'numCasetas', 'costoCasetas',
+    'costoComidas', 'costoTotal'
+  ];
+  for (const field of numericFields) {
+    if (rest[field] !== undefined && rest[field] !== null && rest[field] !== '') {
+      rest[field] = Number(rest[field]);
+    }
+  }
+
+  if (rest.estado) rest.estado = rest.estado.toUpperCase();
+  if (!rest.departamentoId || rest.departamentoId === 'unassigned') rest.departamentoId = null;
+
+  return rest;
 }
 
 export async function createFuelRequest(data: any) {
@@ -370,8 +411,6 @@ export async function createFuelRequest(data: any) {
   const req = await prisma.fuelRequest.create({
     data: {
       ...rest,
-      departamento: data.departamento || "No especificado",
-      area: data.area || "No especificada",
       vehiculo: { connect: { id: vehiculoId } }
     },
     include: { vehiculo: true }
@@ -421,6 +460,7 @@ function cleanExpenseData(data: any) {
 export async function getExpenses() {
   return await prisma.expense.findMany({
     orderBy: { fecha: 'desc' },
+    take: 1000,
     include: {
       vehiculo: {
         select: { id: true, nombreInterno: true, placas: true, fotoUrl: true }
@@ -488,6 +528,7 @@ function cleanIncidentData(data: any) {
 export async function getIncidents() {
   return await prisma.incident.findMany({
     orderBy: { fecha: 'desc' },
+    take: 1000,
     include: {
       vehiculo: {
         select: { id: true, nombreInterno: true, placas: true, fotoUrl: true }
