@@ -485,10 +485,14 @@ function cleanFuelRequestData(data: any) {
 export async function createFuelRequest(data: any) {
   const prisma = getPrisma()
   const { vehiculoId, ...rest } = data
+  if (!rest.departamentoId || rest.departamentoId === 'unassigned') rest.departamentoId = null
+  // vehiculoId se pasa como campo escalar (no vehiculo: { connect }) porque Prisma no
+  // permite mezclar el estilo "checked" (relación anidada) con el estilo "unchecked"
+  // (departamentoId como escalar) en la misma llamada a create().
   const req = await prisma.fuelRequest.create({
     data: {
       ...rest,
-      vehiculo: { connect: { id: vehiculoId } }
+      vehiculoId,
     },
     include: { vehiculo: true }
   })
