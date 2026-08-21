@@ -1,10 +1,11 @@
 'use server'
 
-import { prisma } from '@/lib/prisma'
+import { getPrisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import { hashPassword } from '@/lib/password'
 
 export async function getProfile(email: string) {
+  const prisma = getPrisma()
   const user = await prisma.user.findUnique({
     where: { email },
     select: {
@@ -22,6 +23,7 @@ export async function getProfile(email: string) {
 export async function updateProfile(userId: string, data: any) {
   const { telefono, password, licenciaBase64 } = data
 
+  const prisma = getPrisma()
   const user = await prisma.user.findUnique({ where: { id: userId } })
   if (!user) throw new Error("Usuario no encontrado")
 

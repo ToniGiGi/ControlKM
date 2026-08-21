@@ -1,10 +1,11 @@
 'use server'
 
-import { prisma } from '@/lib/prisma'
+import { getPrisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import { hashPassword } from '@/lib/password'
 
 export async function getVehicles() {
+  const prisma = getPrisma()
   // Optimized: 4 parallel queries instead of 8 JOINs
   const [dbVehicles, allGastos, allMantenimientos, allFuelRequests] = await Promise.all([
     prisma.vehicle.findMany({
@@ -102,6 +103,7 @@ export async function getVehicles() {
 }
 
 export async function getVehicleDetail(id: string) {
+  const prisma = getPrisma()
   const v = await prisma.vehicle.findUnique({
     where: { id },
     include: {
@@ -157,6 +159,7 @@ export async function getVehicleDetail(id: string) {
 }
 
 export async function getEmployees() {
+  const prisma = getPrisma()
   const dbEmployees = await prisma.employee.findMany({
     orderBy: { createdAt: 'desc' },
     include: {
@@ -241,6 +244,7 @@ function cleanEmployeeData(data: any) {
 }
 
 export async function createVehicle(data: any) {
+  const prisma = getPrisma()
   const v = await prisma.vehicle.create({ data: cleanVehicleData(data) })
   revalidatePath('/vehiculos')
   revalidatePath('/')
@@ -248,6 +252,7 @@ export async function createVehicle(data: any) {
 }
 
 export async function deleteVehicle(id: string) {
+  const prisma = getPrisma()
   const v = await prisma.vehicle.delete({ where: { id } })
   revalidatePath('/vehiculos')
   revalidatePath('/')
@@ -255,6 +260,7 @@ export async function deleteVehicle(id: string) {
 }
 
 export async function updateVehicleOrder(updates: { id: string, orden: number }[]) {
+  const prisma = getPrisma()
   // Sin $transaction: el adaptador de libsql sobre HTTP no soporta bien las
   // transacciones en lote de Prisma en el runtime edge (tronaba con 500).
   // No es crítico que sea atómico: es solo el orden visual de las tarjetas.
@@ -273,6 +279,7 @@ export async function updateVehicleOrder(updates: { id: string, orden: number }[
 
 
 export async function updateVehicle(id: string, data: any) {
+  const prisma = getPrisma()
   const v = await prisma.vehicle.update({ where: { id }, data: cleanVehicleData(data) })
   revalidatePath('/vehiculos')
   revalidatePath('/')
@@ -280,6 +287,7 @@ export async function updateVehicle(id: string, data: any) {
 }
 
 export async function createEmployee(data: any) {
+  const prisma = getPrisma()
   const { password, ...rest } = data;
   const e = await prisma.employee.create({ data: cleanEmployeeData(rest) })
   
@@ -300,6 +308,7 @@ export async function createEmployee(data: any) {
 }
 
 export async function updateEmployee(id: string, data: any) {
+  const prisma = getPrisma()
   const { password, ...rest } = data;
   
   if (password && data.userId) {
@@ -337,6 +346,7 @@ function cleanInsuranceData(data: any) {
 }
 
 export async function getInsurances() {
+  const prisma = getPrisma()
   return await prisma.insurance.findMany({
     orderBy: { vencimiento: 'asc' },
     take: 1000,
@@ -347,6 +357,7 @@ export async function getInsurances() {
 }
 
 export async function createInsurance(data: any) {
+  const prisma = getPrisma()
   const ins = await prisma.insurance.create({ data: cleanInsuranceData(data) })
   revalidatePath('/seguros')
   revalidatePath('/vehiculos')
@@ -354,6 +365,7 @@ export async function createInsurance(data: any) {
 }
 
 export async function updateInsurance(id: string, data: any) {
+  const prisma = getPrisma()
   const ins = await prisma.insurance.update({ where: { id }, data: cleanInsuranceData(data) })
   revalidatePath('/seguros')
   revalidatePath('/vehiculos')
@@ -361,6 +373,7 @@ export async function updateInsurance(id: string, data: any) {
 }
 
 export async function deleteInsurance(id: string) {
+  const prisma = getPrisma()
   const ins = await prisma.insurance.delete({ where: { id } })
   revalidatePath('/seguros')
   revalidatePath('/vehiculos')
@@ -382,6 +395,7 @@ function cleanMaintenanceData(data: any) {
 }
 
 export async function getMaintenances() {
+  const prisma = getPrisma()
   return await prisma.maintenance.findMany({
     orderBy: { fecha: 'desc' },
     take: 1000,
@@ -394,6 +408,7 @@ export async function getMaintenances() {
 }
 
 export async function createMaintenance(data: any) {
+  const prisma = getPrisma()
   const main = await prisma.maintenance.create({ data: cleanMaintenanceData(data) })
   revalidatePath('/mantenimientos')
   revalidatePath('/vehiculos')
@@ -401,6 +416,7 @@ export async function createMaintenance(data: any) {
 }
 
 export async function updateMaintenance(id: string, data: any) {
+  const prisma = getPrisma()
   const main = await prisma.maintenance.update({ where: { id }, data: cleanMaintenanceData(data) })
   revalidatePath('/mantenimientos')
   revalidatePath('/vehiculos')
@@ -408,6 +424,7 @@ export async function updateMaintenance(id: string, data: any) {
 }
 
 export async function deleteMaintenance(id: string) {
+  const prisma = getPrisma()
   const main = await prisma.maintenance.delete({ where: { id } })
   revalidatePath('/mantenimientos')
   revalidatePath('/vehiculos')
@@ -415,6 +432,7 @@ export async function deleteMaintenance(id: string) {
 }
 
 export async function approveMaintenance(id: string) {
+  const prisma = getPrisma()
   const main = await prisma.maintenance.update({
     where: { id },
     data: { estado: 'APROBADA' }
@@ -425,6 +443,7 @@ export async function approveMaintenance(id: string) {
 }
 
 export async function getFuelRequests() {
+  const prisma = getPrisma()
   const requests = await prisma.fuelRequest.findMany({
     orderBy: { fechaSolicitud: 'desc' },
     take: 1000,
@@ -464,6 +483,7 @@ function cleanFuelRequestData(data: any) {
 }
 
 export async function createFuelRequest(data: any) {
+  const prisma = getPrisma()
   const { vehiculoId, ...rest } = data
   const req = await prisma.fuelRequest.create({
     data: {
@@ -477,18 +497,21 @@ export async function createFuelRequest(data: any) {
 }
 
 export async function updateFuelRequest(id: string, data: any) {
+  const prisma = getPrisma()
   const req = await prisma.fuelRequest.update({ where: { id }, data: cleanFuelRequestData(data) })
   revalidatePath('/combustible')
   return req
 }
 
 export async function deleteFuelRequest(id: string) {
+  const prisma = getPrisma()
   const req = await prisma.fuelRequest.delete({ where: { id } })
   revalidatePath('/combustible')
   return req
 }
 
 export async function approveFuelRequest(id: string) {
+  const prisma = getPrisma()
   const req = await prisma.fuelRequest.update({ where: { id }, data: { estado: 'APROBADA' } })
   revalidatePath('/combustible')
   revalidatePath('/vehiculos')
@@ -496,6 +519,7 @@ export async function approveFuelRequest(id: string) {
 }
 
 export async function rejectFuelRequest(id: string) {
+  const prisma = getPrisma()
   const req = await prisma.fuelRequest.update({ where: { id }, data: { estado: 'RECHAZADA' } })
   revalidatePath('/combustible')
   revalidatePath('/vehiculos')
@@ -515,6 +539,7 @@ function cleanExpenseData(data: any) {
 }
 
 export async function getExpenses() {
+  const prisma = getPrisma()
   return await prisma.expense.findMany({
     orderBy: { fecha: 'desc' },
     take: 1000,
@@ -527,6 +552,7 @@ export async function getExpenses() {
 }
 
 export async function createExpense(data: any) {
+  const prisma = getPrisma()
   const exp = await prisma.expense.create({ data: cleanExpenseData(data) })
   revalidatePath('/gastos')
   revalidatePath('/vehiculos')
@@ -534,6 +560,7 @@ export async function createExpense(data: any) {
 }
 
 export async function updateExpense(id: string, data: any) {
+  const prisma = getPrisma()
   const exp = await prisma.expense.update({ where: { id }, data: cleanExpenseData(data) })
   revalidatePath('/gastos')
   revalidatePath('/vehiculos')
@@ -541,6 +568,7 @@ export async function updateExpense(id: string, data: any) {
 }
 
 export async function deleteExpense(id: string) {
+  const prisma = getPrisma()
   const exp = await prisma.expense.delete({ where: { id } })
   revalidatePath('/gastos')
   revalidatePath('/vehiculos')
@@ -548,6 +576,7 @@ export async function deleteExpense(id: string) {
 }
 
 export async function approveExpense(id: string) {
+  const prisma = getPrisma()
   const exp = await prisma.expense.update({
     where: { id },
     data: { estado: 'APROBADA' }
@@ -558,6 +587,7 @@ export async function approveExpense(id: string) {
 }
 
 export async function rejectExpense(id: string) {
+  const prisma = getPrisma()
   const exp = await prisma.expense.update({
     where: { id },
     data: { estado: 'RECHAZADA' }
@@ -583,6 +613,7 @@ function cleanIncidentData(data: any) {
 }
 
 export async function getIncidents() {
+  const prisma = getPrisma()
   return await prisma.incident.findMany({
     orderBy: { fecha: 'desc' },
     take: 1000,
@@ -595,6 +626,7 @@ export async function getIncidents() {
 }
 
 export async function createIncident(data: any) {
+  const prisma = getPrisma()
   const inc = await prisma.incident.create({ data: cleanIncidentData(data) })
   revalidatePath('/incidencias')
   revalidatePath('/vehiculos')
@@ -602,6 +634,7 @@ export async function createIncident(data: any) {
 }
 
 export async function updateIncident(id: string, data: any) {
+  const prisma = getPrisma()
   const inc = await prisma.incident.update({ where: { id }, data: cleanIncidentData(data) })
   revalidatePath('/incidencias')
   revalidatePath('/vehiculos')
@@ -609,6 +642,7 @@ export async function updateIncident(id: string, data: any) {
 }
 
 export async function deleteIncident(id: string) {
+  const prisma = getPrisma()
   const inc = await prisma.incident.delete({ where: { id } })
   revalidatePath('/incidencias')
   revalidatePath('/vehiculos')
@@ -616,6 +650,7 @@ export async function deleteIncident(id: string) {
 }
 
 export async function getAlerts(empleadoId?: string) {
+  const prisma = getPrisma()
   const generatedAlerts: any[] = [];
   const filter = empleadoId ? { vehiculo: { empleadoId } } : {};
 
@@ -736,6 +771,7 @@ export async function getAlerts(empleadoId?: string) {
 }
 
 export async function getMonthlyExpenses(empleadoId?: string) {
+  const prisma = getPrisma()
   const filter = empleadoId ? { vehiculo: { empleadoId } } : {};
   
   // Optimized: filter by last 6 months + parallel queries
@@ -809,16 +845,18 @@ export async function getMonthlyExpenses(empleadoId?: string) {
 
   return result;
 }
-export async function rejectMaintenance(id: string) { const main = await prisma.maintenance.update({ where: { id }, data: { estado: 'RECHAZADA' } }); revalidatePath('/mantenimientos'); revalidatePath('/vehiculos'); return main; }
+export async function rejectMaintenance(id: string) { const prisma = getPrisma(); const main = await prisma.maintenance.update({ where: { id }, data: { estado: 'RECHAZADA' } }); revalidatePath('/mantenimientos'); revalidatePath('/vehiculos'); return main; }
 
 
 // --- Organization (Branches & Departments) ---
 
 export async function getBranches() {
+  const prisma = getPrisma()
   return await prisma.branch.findMany({ orderBy: { name: 'asc' } })
 }
 
 export async function createBranch(name: string) {
+  const prisma = getPrisma()
   const b = await prisma.branch.create({ data: { name } })
   // revalidatePath('/organizacion')
   // revalidatePath('/empleados')
@@ -827,6 +865,7 @@ export async function createBranch(name: string) {
 }
 
 export async function deleteBranch(id: string) {
+  const prisma = getPrisma()
   const b = await prisma.branch.delete({ where: { id } })
   revalidatePath('/organizacion')
   revalidatePath('/empleados')
@@ -835,10 +874,12 @@ export async function deleteBranch(id: string) {
 }
 
 export async function getDepartments() {
+  const prisma = getPrisma()
   return await prisma.department.findMany({ orderBy: { name: 'asc' } })
 }
 
 export async function createDepartment(name: string) {
+  const prisma = getPrisma()
   const d = await prisma.department.create({ data: { name } })
   revalidatePath('/organizacion')
   revalidatePath('/empleados')
@@ -846,6 +887,7 @@ export async function createDepartment(name: string) {
 }
 
 export async function deleteDepartment(id: string) {
+  const prisma = getPrisma()
   const d = await prisma.department.delete({ where: { id } })
   revalidatePath('/organizacion')
   revalidatePath('/empleados')
@@ -855,6 +897,7 @@ export async function deleteDepartment(id: string) {
 // --- Organization Config ---
 
 export async function getOrganizationConfig() {
+  const prisma = getPrisma()
   const config = await prisma.organizationConfig.findUnique({
     where: { id: "default" }
   })
@@ -867,6 +910,7 @@ export async function getOrganizationConfig() {
 }
 
 export async function updateOrganizationConfig(data: { name: string, logoUrl?: string | null }) {
+  const prisma = getPrisma()
   const config = await prisma.organizationConfig.upsert({
     where: { id: "default" },
     update: data,
@@ -879,10 +923,12 @@ export async function updateOrganizationConfig(data: { name: string, logoUrl?: s
 // --- Insurance Companies (Aseguradoras) ---
 
 export async function getInsuranceCompanies() {
+  const prisma = getPrisma()
   return await prisma.insuranceCompany.findMany({ orderBy: { name: 'asc' } })
 }
 
 export async function createInsuranceCompany(name: string) {
+  const prisma = getPrisma()
   const i = await prisma.insuranceCompany.create({ data: { name } })
   revalidatePath('/organizacion')
   revalidatePath('/seguros')
@@ -890,6 +936,7 @@ export async function createInsuranceCompany(name: string) {
 }
 
 export async function deleteInsuranceCompany(id: string) {
+  const prisma = getPrisma()
   const i = await prisma.insuranceCompany.delete({ where: { id } })
   revalidatePath('/organizacion')
   revalidatePath('/seguros')
