@@ -111,6 +111,7 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
 
 export function VehicleDetail({ id, initialVehicle, employees = [] }: { id: string, initialVehicle?: any, employees?: any[] }) {
   const { role, config, can } = useRole()
+  const isConductor = role === 'conductor'
   const [vehicle, setVehicle] = useState<any | undefined>(initialVehicle)
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false)
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('')
@@ -282,9 +283,9 @@ export function VehicleDetail({ id, initialVehicle, employees = [] }: { id: stri
                           <p className="flex items-center gap-2 text-base font-medium">
                             <User className="size-4" /> Empleado asignado
                           </p>
-                          {can('crear_editar') && (
-                            <Button 
-                              variant="outline" 
+                          {can('crear_editar') && !isConductor && (
+                            <Button
+                              variant="outline"
                               size="sm"
                               onClick={() => {
                                 setSelectedEmployeeId(vehicle.empleadoId || 'unassigned')
@@ -313,9 +314,9 @@ export function VehicleDetail({ id, initialVehicle, employees = [] }: { id: stri
                           <p className="flex items-center gap-2 text-base font-medium">
                             <User className="size-4" /> Empleado asignado
                           </p>
-                          {can('crear_editar') && (
-                            <Button 
-                              variant="outline" 
+                          {can('crear_editar') && !isConductor && (
+                            <Button
+                              variant="outline"
                               size="sm"
                               onClick={() => {
                                 setSelectedEmployeeId(vehicle.empleadoId || 'unassigned')
