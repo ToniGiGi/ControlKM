@@ -1,6 +1,6 @@
 name = "fleetcore"
 compatibility_date = "2024-03-20"
-compatibility_flags = ["nodejs_compat"]
+compatibility_flags = ["nodejs_compat", "no_handle_cross_request_promise_resolution"]
 
 [build]
 command = "npm run build"
