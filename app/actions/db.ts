@@ -101,6 +101,61 @@ export async function getVehicles() {
   })
 }
 
+export async function getVehicleDetail(id: string) {
+  const v = await prisma.vehicle.findUnique({
+    where: { id },
+    include: {
+      empleado: { select: { id: true, nombre: true, email: true, telefono: true, puesto: true, fotoUrl: true } },
+      seguros: { orderBy: { vencimiento: 'desc' }, take: 1 },
+      sucursalRef: { select: { id: true, name: true } },
+      mantenimientos: { orderBy: { fecha: 'desc' } },
+      incidencias: { orderBy: { fecha: 'desc' } },
+      viajes: { orderBy: { fecha: 'desc' } },
+      cargas: { orderBy: { fecha: 'desc' } },
+      gastos: true,
+      fuelRequests: { where: { estado: 'APROBADA' } },
+    }
+  })
+  if (!v) return null
+
+  const gasolinaViaticos = v.fuelRequests.reduce((a, b) => a + (b.costoGasolina || 0), 0)
+  const casetasViaticos = v.fuelRequests.reduce((a, b) => a + (b.costoCasetas || 0), 0)
+  const comidasViaticos = v.fuelRequests.reduce((a, b) => a + (b.costoComidas || 0), 0)
+
+  const gastosMapped = {
+    gasolina: v.gastos.filter(g => g.categoria === 'GASOLINA').reduce((a, b) => a + b.monto, 0) + gasolinaViaticos,
+    mantenimiento: v.gastos.filter(g => g.categoria === 'MANTENIMIENTO').reduce((a, b) => a + b.monto, 0) + v.mantenimientos.reduce((a, b) => a + (b.costo || 0), 0),
+    reparacion: v.gastos.filter(g => g.categoria === 'REPARACION').reduce((a, b) => a + b.monto, 0),
+    aceite: v.gastos.filter(g => g.categoria === 'ACEITE').reduce((a, b) => a + b.monto, 0),
+    neumaticos: v.gastos.filter(g => g.categoria === 'NEUMATICOS').reduce((a, b) => a + b.monto, 0),
+    aditamentos: v.gastos.filter(g => g.categoria === 'ADITAMENTOS').reduce((a, b) => a + b.monto, 0),
+    casetas: v.gastos.filter(g => g.categoria === 'CASETAS').reduce((a, b) => a + b.monto, 0) + casetasViaticos,
+    multas: v.gastos.filter(g => g.categoria === 'MULTAS').reduce((a, b) => a + b.monto, 0),
+    otros: v.gastos.filter(g => g.categoria === 'OTROS').reduce((a, b) => a + b.monto, 0) + comidasViaticos,
+  }
+
+  const telemetria = {
+    dispositivo: 'GPS-000',
+    estado: v.estado === 'ACTIVO' ? 'en_movimiento' : 'detenido',
+    lat: 0,
+    lng: 0,
+    velocidad: 0,
+    ultimoReporte: new Date().toISOString()
+  }
+
+  const maxKm = Math.max(v.kmActual || 0, ...(v.mantenimientos.map(m => m.km || 0)))
+
+  return {
+    ...v,
+    kmActual: maxKm,
+    estado: v.estado.toLowerCase(),
+    seguro: v.seguros && v.seguros[0] ? { ...v.seguros[0], estado: v.seguros[0].estado.toLowerCase() } : { estado: 'vencido' },
+    gastos: gastosMapped,
+    telemetria,
+    sucursal: v.sucursalRef?.name || v.sucursal,
+  }
+}
+
 export async function getEmployees() {
   const dbEmployees = await prisma.employee.findMany({
     orderBy: { createdAt: 'desc' },
