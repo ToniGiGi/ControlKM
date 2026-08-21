@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client'
-import { createClient } from '@libsql/client'
+import { createClient } from '@libsql/client/http'
 import { PrismaLibSQL } from '@prisma/adapter-libsql'
 
 
