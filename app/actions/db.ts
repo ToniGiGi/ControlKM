@@ -200,9 +200,11 @@ export async function deleteVehicle(id: string) {
 }
 
 export async function updateVehicleOrder(updates: { id: string, orden: number }[]) {
-  // Utilizamos transacciones para asegurar que todos los updates se hagan juntos
-  await prisma.$transaction(
-    updates.map((update) => 
+  // Sin $transaction: el adaptador de libsql sobre HTTP no soporta bien las
+  // transacciones en lote de Prisma en el runtime edge (tronaba con 500).
+  // No es crítico que sea atómico: es solo el orden visual de las tarjetas.
+  await Promise.all(
+    updates.map((update) =>
       prisma.vehicle.update({
         where: { id: update.id },
         data: { orden: update.orden }

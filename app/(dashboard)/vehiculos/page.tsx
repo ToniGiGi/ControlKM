@@ -9,8 +9,8 @@ export default async function VehiculosPage() {
   ])
   
   return <VehicleList 
-    initialVehicles={vehicles} 
-    initialEmployees={employees} 
-    branches={branches} 
+    initialVehicles={JSON.parse(JSON.stringify(vehicles))} 
+    initialEmployees={JSON.parse(JSON.stringify(employees))} 
+    branches={JSON.parse(JSON.stringify(branches))} 
   />
 }

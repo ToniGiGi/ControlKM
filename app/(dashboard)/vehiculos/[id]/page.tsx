@@ -11,5 +11,9 @@ export default async function VehicleDetailPage({
   const vehicle = vehicles.find(v => v.id === id)
   const employees = await getEmployees()
   
-  return <VehicleDetail id={id} initialVehicle={vehicle} employees={employees} />
+  return <VehicleDetail 
+    id={id} 
+    initialVehicle={JSON.parse(JSON.stringify(vehicle))} 
+    employees={JSON.parse(JSON.stringify(employees))} 
+  />
 }
