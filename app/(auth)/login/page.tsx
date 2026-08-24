@@ -17,7 +17,7 @@ export default async function LoginPage({
     <div className="flex min-h-screen">
 
       {/* ─── LEFT PANEL: Full background image + overlay + content ─── */}
-      <div className="hidden lg:flex w-[52%] relative overflow-hidden">
+      <div className="hidden lg:flex lg:w-[55%] relative overflow-hidden lg:rounded-r-[3rem] z-20 shadow-[20px_0_40px_rgba(0,0,0,0.1)]">
 
         {/* Background image — fills entire panel */}
         <Image
@@ -66,7 +66,7 @@ export default async function LoginPage({
       </div>
 
       {/* ─── RIGHT PANEL: Login form ─── */}
-      <div className="flex w-full flex-col items-center justify-center bg-[#F7F8FA] px-6 sm:px-10 lg:w-[48%]">
+      <div className="relative z-10 flex w-full flex-col items-center justify-center bg-[#F7F8FA] px-6 sm:px-10 lg:w-[50%] lg:-ml-[5%]">
         <div className="w-full max-w-[400px] rounded-2xl border border-slate-200/80 bg-white px-8 py-10 shadow-[0_4px_24px_rgba(0,0,0,0.04)]">
 
           {/* Logo Qrubyx */}
