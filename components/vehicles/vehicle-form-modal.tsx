@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Car, ImagePlus, Activity, MapPin, Hash, Palette, Fuel, PenTool, Loader2 } from 'lucide-react'
+import { Car, ImagePlus, Activity, MapPin, Hash, Palette, Fuel, PenTool, Loader2, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { type Vehicle, type VehicleStatus } from '@/lib/mock-data'
 import { uploadImage } from '@/app/actions/upload'
@@ -122,6 +122,12 @@ export function VehicleFormModal({ isOpen, onClose, onSave, vehicle, sucursales 
     fileInputRef.current?.click()
   }
 
+  const handleRemovePhoto = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    handleChange('fotoUrl', '')
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
   return (
     <Dialog open={isOpen} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-4xl w-full max-h-[90vh] overflow-y-auto overflow-x-hidden custom-scrollbar">
@@ -207,7 +213,9 @@ export function VehicleFormModal({ isOpen, onClose, onSave, vehicle, sucursales 
               <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5"><MapPin className="size-3.5" /> Sucursal Asignada</label>
               <Select value={formData.sucursalId || ''} onValueChange={(val) => handleChange('sucursalId', val)}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Seleccione la sucursal" />
+                  <SelectValue placeholder="Seleccione la sucursal">
+                    {sucursales.find(s => s.id === formData.sucursalId)?.name || 'Seleccione la sucursal'}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {sucursales.map(s => (
@@ -259,6 +267,15 @@ export function VehicleFormModal({ isOpen, onClose, onSave, vehicle, sucursales 
                         <ImagePlus className="size-4" /> Cambiar
                       </span>
                     </div>
+                    <button
+                      type="button"
+                      onClick={handleRemovePhoto}
+                      disabled={uploadingFoto}
+                      aria-label="Eliminar fotografía"
+                      className="absolute top-2 right-2 flex size-7 items-center justify-center rounded-full bg-black/60 text-white hover:bg-destructive transition-colors disabled:opacity-50"
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
                   </>
                 ) : (
                   <div className="flex flex-col items-center text-muted-foreground gap-2">
@@ -272,9 +289,16 @@ export function VehicleFormModal({ isOpen, onClose, onSave, vehicle, sucursales 
                   </div>
                 )}
               </div>
-              <Button type="button" variant="outline" size="sm" className="w-full" onClick={triggerFileInput} disabled={uploadingFoto}>
-                {uploadingFoto ? 'Subiendo...' : 'Subir fotografía'}
-              </Button>
+              <div className="flex w-full gap-2">
+                <Button type="button" variant="outline" size="sm" className="flex-1" onClick={triggerFileInput} disabled={uploadingFoto}>
+                  {uploadingFoto ? 'Subiendo...' : 'Subir fotografía'}
+                </Button>
+                {formData.fotoUrl && (
+                  <Button type="button" variant="outline" size="sm" onClick={handleRemovePhoto} disabled={uploadingFoto} aria-label="Eliminar fotografía">
+                    <Trash2 className="size-4" />
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
 
