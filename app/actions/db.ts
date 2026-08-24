@@ -20,6 +20,7 @@ export async function getVehicles() {
       }
     }),
     prisma.expense.findMany({
+      where: { estado: 'APROBADA' },
       select: { vehiculoId: true, categoria: true, monto: true }
     }),
     prisma.maintenance.findMany({
@@ -114,7 +115,7 @@ export async function getVehicleDetail(id: string) {
       incidencias: { orderBy: { fecha: 'desc' } },
       viajes: { orderBy: { fecha: 'desc' } },
       cargas: { orderBy: { fecha: 'desc' } },
-      gastos: true,
+      gastos: { where: { estado: 'APROBADA' } },
       fuelRequests: { where: { estado: 'APROBADA' } },
     }
   })
@@ -231,7 +232,7 @@ function cleanVehicleData(data: any) {
 }
 
 function cleanEmployeeData(data: any) {
-  const { id, vehiculosAsignados, vehiculo, createdAt, updatedAt, password, user, sucursal, area, ...rest } = data;
+  const { id, vehiculosAsignados, vehiculo, createdAt, updatedAt, password, user, sucursal, area, sucursalRef, departamentoRef, ...rest } = data;
   if (rest.estado) rest.estado = rest.estado.toUpperCase();
   if (rest.vencimientoLicencia) {
     rest.vencimientoLicencia = new Date(rest.vencimientoLicencia);
@@ -289,8 +290,16 @@ export async function updateVehicle(id: string, data: any) {
 export async function createEmployee(data: any) {
   const prisma = getPrisma()
   const { password, ...rest } = data;
+
+  if (rest.email && password) {
+    const existing = await prisma.user.findUnique({ where: { email: rest.email } })
+    if (existing) {
+      throw new Error('Ya existe un empleado registrado con ese correo electrónico.')
+    }
+  }
+
   const e = await prisma.employee.create({ data: cleanEmployeeData(rest) })
-  
+
   if (rest.email && password) {
     const user = await prisma.user.create({
       data: {
@@ -463,7 +472,7 @@ export async function getFuelRequests() {
 }
 
 function cleanFuelRequestData(data: any) {
-  const { id, vehiculo, createdAt, updatedAt, ...rest } = data;
+  const { id, vehiculo, createdAt, updatedAt, departamentoRef, ...rest } = data;
 
   const numericFields = [
     'kmAproximado', 'kmHolgura', 'rendimiento', 'precioGasolina',
@@ -658,11 +667,15 @@ export async function getAlerts(empleadoId?: string) {
   const generatedAlerts: any[] = [];
   const filter = empleadoId ? { vehiculo: { empleadoId } } : {};
 
-  // Optimized: 5 queries in PARALLEL instead of sequential
-  const [seguros, recientesIncidencias, recientesCombustible, recientesGastos, recientesMantenimientos] = await Promise.all([
+  // Optimized: 6 queries in PARALLEL instead of sequential
+  const [seguros, vehiculosSinSeguro, recientesIncidencias, recientesCombustible, recientesGastos, recientesMantenimientos] = await Promise.all([
     prisma.insurance.findMany({
       where: { ...filter, OR: [{ estado: 'VIGENTE' }, { estado: 'VENCIDO' }] },
       include: { vehiculo: { select: { id: true, nombreInterno: true, marca: true } } }
+    }),
+    prisma.vehicle.findMany({
+      where: { ...(empleadoId ? { empleadoId } : {}), seguros: { none: {} } },
+      select: { id: true, nombreInterno: true, marca: true, createdAt: true }
     }),
     prisma.incident.findMany({
       where: { estado: 'ABIERTA', ...filter },
@@ -719,6 +732,18 @@ export async function getAlerts(empleadoId?: string) {
     }
   });
 
+  vehiculosSinSeguro.forEach(v => {
+    generatedAlerts.push({
+      id: `seguro-faltante-${v.id}`,
+      vehiculoId: v.id,
+      tipo: 'Seguro no registrado',
+      mensaje: `${v.nombreInterno || v.marca} no tiene ninguna póliza de seguro registrada`,
+      severidad: 'media',
+      href: '/seguros',
+      fecha: v.createdAt
+    });
+  });
+
   recientesIncidencias.forEach(inc => {
     const created = new Date(inc.createdAt);
     const diffHours = Math.abs(now.getTime() - created.getTime()) / 36e5;
@@ -740,7 +765,7 @@ export async function getAlerts(empleadoId?: string) {
       id: `combustible-${req.id}`,
       vehiculoId: req.vehiculoId,
       tipo: 'Combustible por Aprobar',
-      mensaje: `Nueva solicitud de combustible por ${req.litrosSolicitados} Lts para ${req.vehiculo?.nombreInterno || req.vehiculo?.marca}`,
+      mensaje: `Nueva solicitud de combustible por ${req.litrosSolicitados.toFixed(1)} Lts para ${req.vehiculo?.nombreInterno || req.vehiculo?.marca}`,
       severidad: 'media',
       href: '/combustible',
       fecha: req.createdAt
@@ -784,7 +809,7 @@ export async function getMonthlyExpenses(empleadoId?: string) {
   
   const [expenses, fuelRequests, maintenances] = await Promise.all([
     prisma.expense.findMany({
-      where: { ...filter, fecha: { gte: sixMonthsAgo } },
+      where: { estado: 'APROBADA', ...filter, fecha: { gte: sixMonthsAgo } },
       select: { fecha: true, categoria: true, monto: true }
     }),
     prisma.fuelRequest.findMany({
