@@ -410,7 +410,7 @@ export async function getMaintenances() {
     take: 1000,
     include: {
       vehiculo: {
-        select: { id: true, nombreInterno: true, placas: true, fotoUrl: true }
+        select: { id: true, nombreInterno: true, placas: true, fotoUrl: true, empleadoId: true }
       }
     }
   })
@@ -558,7 +558,7 @@ export async function getExpenses() {
     take: 1000,
     include: {
       vehiculo: {
-        select: { id: true, nombreInterno: true, placas: true, fotoUrl: true }
+        select: { id: true, nombreInterno: true, placas: true, fotoUrl: true, empleadoId: true }
       }
     }
   })
