@@ -149,7 +149,7 @@ export function FuelRequestForm({ vehicles, departments }: FuelRequestFormProps)
     setKmTotal(totalKm)
 
     const ren = rendimiento > 0 ? rendimiento : 1
-    const lts = totalKm / ren
+    const lts = Math.round((totalKm / ren) * 100) / 100
     setLitros(lts)
 
     const pGas = GAS_PRICES[tipoGasolina]
@@ -232,7 +232,11 @@ export function FuelRequestForm({ vehicles, departments }: FuelRequestFormProps)
               <div className="space-y-2">
                 <Label>Departamento <span className="text-destructive">*</span></Label>
                 <Select value={departamentoId} onValueChange={(v) => setDepartamentoId(v || "")} required>
-                  <SelectTrigger><SelectValue placeholder="Selecciona el departamento" /></SelectTrigger>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecciona el departamento">
+                      {departments.find(d => d.id === departamentoId)?.name || 'Selecciona el departamento'}
+                    </SelectValue>
+                  </SelectTrigger>
                   <SelectContent>
                     {departments.map(d => (
                       <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>

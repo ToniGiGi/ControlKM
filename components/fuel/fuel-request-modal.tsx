@@ -55,7 +55,7 @@ export function FuelRequestModal({ vehicles, onClose, onSave }: FuelRequestModal
     setKmTotal(totalKm)
 
     const ren = rendimiento > 0 ? rendimiento : 1
-    const lts = totalKm / ren
+    const lts = Math.round((totalKm / ren) * 100) / 100
     setLitros(lts)
 
     const pGas = GAS_PRICES[tipoGasolina]
