@@ -29,7 +29,9 @@ model Employee {
   puesto              String?
   area                String?   // deprecated: usar departamentoId. Se mantiene por compatibilidad histórica.
   sucursal            String?   // deprecated: usar sucursalId. Se mantiene por compatibilidad histórica.
-  licencia            String?
+  licencia            String?   // número de licencia (texto)
+  licenciaUrl         String?   // documento/foto de la licencia, subido a R2
+  licenciaVigenciaInicio DateTime?
   vencimientoLicencia DateTime?
   estado              String    @default("ACTIVO")
   createdAt           DateTime  @default(now())
