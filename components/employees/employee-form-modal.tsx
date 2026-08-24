@@ -14,7 +14,7 @@ import { uploadImage } from '@/app/actions/upload'
 type EmployeeFormModalProps = {
   isOpen: boolean
   onClose: () => void
-  onSave: (emp: Partial<Employee>) => void
+  onSave: (emp: Partial<Employee>) => void | Promise<void>
   employee?: Employee | null
   sucursales: any[]
   areas: any[]
@@ -24,6 +24,7 @@ export function EmployeeFormModal({ isOpen, onClose, onSave, employee, sucursale
   const isEditing = !!employee
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploadingFoto, setUploadingFoto] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
 
   const [formData, setFormData] = useState<Partial<Employee>>({
     nombre: '',
@@ -65,9 +66,17 @@ export function EmployeeFormModal({ isOpen, onClose, onSave, employee, sucursale
     setFormData((prev) => ({ ...prev, [field]: value }))
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    onSave(formData)
+    if (isSaving) return
+    setIsSaving(true)
+    try {
+      await onSave(formData)
+    } catch {
+      // El error ya se muestra al usuario donde se maneja onSave.
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -166,7 +175,9 @@ export function EmployeeFormModal({ isOpen, onClose, onSave, employee, sucursale
                 <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5"><Building className="size-3.5" /> Área</label>
                 <Select required value={formData.departamentoId || ''} onValueChange={(val) => handleChange('departamentoId', val)}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Selecciona el Área" />
+                    <SelectValue placeholder="Selecciona el Área">
+                      {areas.find(a => a.id === formData.departamentoId)?.name || 'Selecciona el Área'}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {areas.map(a => (
@@ -180,7 +191,9 @@ export function EmployeeFormModal({ isOpen, onClose, onSave, employee, sucursale
                 <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5"><MapPin className="size-3.5" /> Sucursal</label>
                 <Select required value={formData.sucursalId || ''} onValueChange={(val) => handleChange('sucursalId', val)}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Selecciona sucursal" />
+                    <SelectValue placeholder="Selecciona sucursal">
+                      {sucursales.find(s => s.id === formData.sucursalId)?.name || 'Selecciona sucursal'}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {sucursales.map(s => (
@@ -209,7 +222,9 @@ export function EmployeeFormModal({ isOpen, onClose, onSave, employee, sucursale
 
           <DialogFooter className="mt-6">
             <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
-            <Button type="submit" disabled={uploadingFoto}>{isEditing ? 'Guardar cambios' : 'Crear Empleado'}</Button>
+            <Button type="submit" disabled={uploadingFoto || isSaving}>
+              {isSaving ? 'Guardando...' : isEditing ? 'Guardar cambios' : 'Crear Empleado'}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

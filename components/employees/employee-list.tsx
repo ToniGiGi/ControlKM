@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useEffect } from 'react'
 import Link from 'next/link'
+import { toast } from 'sonner'
 import {
   Search,
   Mail,
@@ -129,21 +130,38 @@ export function EmployeeList({ initialEmployees, initialVehicles, branches = [],
   const handleSaveEmployee = async (empData: Partial<Employee>) => {
     try {
       if (editingEmployee) {
+        const previous = editingEmployee
         setEmployeesList((prev) =>
           prev.map((e) => (e.id === editingEmployee.id ? { ...e, ...empData } : e))
         )
-        const { updateEmployee } = await import('@/app/actions/db')
-        await updateEmployee(editingEmployee.id, empData)
+        try {
+          const { updateEmployee } = await import('@/app/actions/db')
+          await updateEmployee(editingEmployee.id, empData)
+        } catch (err) {
+          setEmployeesList((prev) => prev.map((e) => (e.id === previous.id ? previous : e)))
+          throw err
+        }
       } else {
         const newTempId = `temp-${Date.now()}`
         setEmployeesList((prev) => [...prev, { id: newTempId, ...empData } as any])
-        const { createEmployee } = await import('@/app/actions/db')
-        await createEmployee(empData)
+        try {
+          const { createEmployee } = await import('@/app/actions/db')
+          await createEmployee(empData)
+        } catch (err) {
+          setEmployeesList((prev) => prev.filter((e) => e.id !== newTempId))
+          throw err
+        }
       }
       setIsFormOpen(false)
       setEditingEmployee(null)
-    } catch (e) {
+    } catch (e: any) {
       console.error(e)
+      // Los errores propios (como el de correo duplicado) son mensajes cortos y claros;
+      // los de Prisma/DB son volcados largos que no queremos mostrar tal cual al usuario.
+      const friendlyMessage =
+        typeof e?.message === 'string' && e.message.length < 150 ? e.message : null
+      toast.error(friendlyMessage || 'No se pudo guardar el empleado. Intenta de nuevo.')
+      throw e
     }
   }
 
