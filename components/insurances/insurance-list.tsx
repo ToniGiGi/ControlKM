@@ -159,14 +159,18 @@ export function InsuranceList({ initialInsurances, vehicles, insuranceCompanies 
     }
     if (query.trim() !== '') {
       const q = query.toLowerCase()
-      filtered = filtered.filter(i => 
+      filtered = filtered.filter(i =>
         i.aseguradora.toLowerCase().includes(q) ||
         i.poliza.toLowerCase().includes(q) ||
         i.vehiculo?.nombreInterno.toLowerCase().includes(q) ||
         i.vehiculo?.placas.toLowerCase().includes(q)
       )
     }
-    return filtered
+    // Las que están más cerca de vencer (o ya vencidas) primero, las que tienen
+    // más tiempo por delante al final.
+    return [...filtered].sort(
+      (a, b) => new Date(a.vencimiento).getTime() - new Date(b.vencimiento).getTime()
+    )
   }, [insurances, query, estado, isConductor, config.empleadoId, vehicles])
 
   useEffect(() => { setPage(1) }, [query, estado])
