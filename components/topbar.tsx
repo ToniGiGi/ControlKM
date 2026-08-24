@@ -4,7 +4,7 @@ import { Bell, Menu, Search, PanelLeftClose, PanelLeft, X } from 'lucide-react'
 import { usePathname, useRouter } from 'next/navigation'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { 
   AlertCircle, AlertTriangle, Info, Clock, ShieldCheck, Wrench, Fuel, Receipt, TriangleAlert
 } from 'lucide-react'
@@ -197,6 +197,7 @@ export function Topbar({ onMenu, onToggleCollapse, isCollapsed }: { onMenu: () =
               <p className="text-xs text-muted-foreground">{config.label}</p>
             </div>
             <Avatar className="size-9 border border-border group-hover:border-primary/50 transition-colors">
+              <AvatarImage src={config.image || undefined} alt={config.nombre} className="object-cover" />
               <AvatarFallback className="bg-primary text-primary-foreground text-xs font-bold">
                 {initials(config.nombre)}
               </AvatarFallback>

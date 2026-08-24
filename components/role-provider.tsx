@@ -11,6 +11,7 @@ interface RoleConfig {
   descripcion: string
   empleadoId: string
   nombre: string
+  image?: string
 }
 
 interface RoleContextValue {
@@ -49,11 +50,10 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     )
   }
 
-  console.log("NEXTAUTH SESSION:", session)
-
   const role = (session?.user as any)?.role?.toLowerCase() as Role || 'conductor'
   const email = session?.user?.email || ''
   const name = session?.user?.name || email.split('@')[0] || 'Usuario'
+  const image = session?.user?.image || undefined
   
   const empleadoId = (session?.user as any)?.employeeId || ''
   const config: RoleConfig = {
@@ -62,6 +62,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     descripcion: '',
     empleadoId, 
     nombre: name,
+    image,
   }
 
   const can = (action: Permission) => permissionsByRole[role]?.includes(action) || false
