@@ -2,14 +2,14 @@
 
 import Link from 'next/link'
 import { useState, useMemo, useEffect } from 'react'
-import { Plus, Search, Fuel, CreditCard, Banknote, Map, CheckCircle, XCircle, FileDown, Trash2, LayoutGrid, List } from 'lucide-react'
+import { Plus, Search, Wallet, Utensils, BedDouble, Car, CheckCircle, XCircle, FileDown, Trash2, FileText, Fuel, LayoutGrid, List } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PageHeader } from '@/components/page-header'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import {
   Table,
   TableBody,
@@ -18,20 +18,20 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { FuelPdfDocument } from './fuel-pdf-document'
+import { TravelPdfDocument } from './travel-pdf-document'
 import { SignatureModal } from '@/components/shared/signature-modal'
 import { RejectModal } from '@/components/shared/reject-modal'
-import { approveFuelRequest, rejectFuelRequest, deleteFuelRequest } from '@/app/actions/db'
+import { approveTravelRequest, rejectTravelRequest, deleteTravelRequest } from '@/app/actions/db'
 import { useRole } from '@/components/role-provider'
 import { ListPagination } from '@/components/ui/list-pagination'
 
 const PAGE_SIZE = 12
 
-type FuelRequestListProps = {
+type TravelRequestListProps = {
   initialRequests: any[]
-  vehicles: any[]
 }
-export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListProps) {
+
+export function TravelRequestList({ initialRequests }: TravelRequestListProps) {
   const { role, config } = useRole()
   const isConductor = role === 'conductor'
 
@@ -52,7 +52,7 @@ export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListPr
   const handleConfirmApproveSignature = async (firmaAprobadorUrl: string) => {
     if (!approvingId) return
     try {
-      await approveFuelRequest(approvingId, firmaAprobadorUrl)
+      await approveTravelRequest(approvingId, firmaAprobadorUrl)
       setRequests(prev => prev.map(r => r.id === approvingId ? { ...r, estado: 'APROBADA', firmaAprobadorUrl } : r))
     } catch (err) {
       console.error(err)
@@ -67,7 +67,7 @@ export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListPr
 
   const handleConfirmReject = async (observaciones: string) => {
     if (!rejectingId) return
-    await rejectFuelRequest(rejectingId, observaciones)
+    await rejectTravelRequest(rejectingId, observaciones)
     setRequests(prev => prev.map(r => r.id === rejectingId ? { ...r, estado: 'RECHAZADA', observacionesRechazo: observaciones } : r))
     setRejectingId(null)
   }
@@ -75,7 +75,7 @@ export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListPr
   const handleDelete = async (id: string) => {
     if (confirm('¿Eliminar permanentemente este registro?')) {
       try {
-        await deleteFuelRequest(id)
+        await deleteTravelRequest(id)
         setRequests(prev => prev.filter(r => r.id !== id))
       } catch (err) {
         console.error(err)
@@ -85,24 +85,22 @@ export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListPr
 
   const filtered = useMemo(() => {
     return requests.filter((r) => {
-      const v = r.vehiculo || vehicles.find(v => v.id === r.vehiculoId)
-      
-      // Si es conductor, solo mostrar las de su vehículo
-      if (isConductor && v?.empleadoId !== config.empleadoId) {
+      if (isConductor && r.empleadoId !== config.empleadoId) {
         return false
       }
-      
+
       const q = query.toLowerCase()
       const matchQ =
         !q ||
-        [v?.nombreInterno, v?.placas, r.motivo, r.rutas, r.solicitanteNombre]
+        [r.solicitanteNombre, r.puesto, r.folioPedido]
+          .filter(Boolean)
           .join(' ')
           .toLowerCase()
           .includes(q)
       const matchEstado = estado === 'todos' || r.estado === estado.toUpperCase()
       return matchQ && matchEstado
     })
-  }, [requests, query, estado, vehicles])
+  }, [requests, query, estado, isConductor, config.empleadoId])
 
   useEffect(() => { setPage(1) }, [query, estado])
 
@@ -128,7 +126,7 @@ export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListPr
   return (
     <div className="flex-1 space-y-6 p-4 md:p-8 pt-6 max-w-screen-2xl mx-auto w-full relative">
       {pdfData && (
-        <FuelPdfDocument
+        <TravelPdfDocument
           data={pdfData}
           onClose={() => setPdfData(null)}
         />
@@ -138,7 +136,7 @@ export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListPr
         open={!!approvingId}
         onOpenChange={(open) => { if (!open) setApprovingId(null) }}
         title="Firma de Autorización"
-        description="Dibuja tu firma para aprobar esta solicitud de combustible."
+        description="Dibuja tu firma para aprobar esta solicitud de viáticos."
         confirmLabel="Aprobar y Firmar"
         onConfirm={handleConfirmApproveSignature}
       />
@@ -146,15 +144,15 @@ export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListPr
       <RejectModal
         open={!!rejectingId}
         onOpenChange={(open) => { if (!open) setRejectingId(null) }}
-        description="Indica por qué se rechaza esta solicitud de combustible."
+        description="Indica por qué se rechaza esta solicitud de viáticos."
         onConfirm={handleConfirmReject}
       />
 
       <PageHeader
-        title="Solicitudes de Combustible"
-        description={`${filtered.length} viáticos gestionados`}
+        title="Viáticos"
+        description={`${filtered.length} solicitudes gestionadas`}
       >
-        <Link href="/combustible/nueva">
+        <Link href="/viaticos/nueva">
           <Button className="gap-2">
             <Plus className="size-4" />
             Nueva Solicitud
@@ -168,7 +166,7 @@ export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListPr
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Buscar por vehículo, solicitante, ruta o motivo..."
+            placeholder="Buscar por solicitante, puesto o folio..."
             className="pl-9"
           />
         </div>
@@ -219,9 +217,9 @@ export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListPr
           {paginated.map((r) => {
             const isPending = r.estado === 'PENDIENTE'
             const isApproved = r.estado === 'APROBADA'
-            const badgeClass = isApproved 
-              ? 'border-emerald-500/50 text-emerald-600 bg-emerald-500/10' 
-              : isPending 
+            const badgeClass = isApproved
+              ? 'border-emerald-500/50 text-emerald-600 bg-emerald-500/10'
+              : isPending
                 ? 'border-amber-500/50 text-amber-600 bg-amber-500/10'
                 : 'border-red-500/50 text-red-600 bg-red-500/10'
 
@@ -232,14 +230,14 @@ export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListPr
                     <div className="flex items-center gap-2">
                       <Avatar className="size-10 rounded-md bg-muted p-1">
                         <AvatarFallback className="rounded-md bg-transparent text-primary">
-                          <Fuel className="size-5" />
+                          <Wallet className="size-5" />
                         </AvatarFallback>
                       </Avatar>
                       <div>
                         <CardTitle className="text-base font-semibold">
-                          {r.vehiculo?.nombreInterno || 'Vehículo Desconocido'}
+                          {r.solicitanteNombre || 'Sin nombre'}
                         </CardTitle>
-                        <p className="text-xs text-muted-foreground">{r.solicitanteNombre || 'Sin nombre'} • {formatDate(r.fechaSolicitud)}</p>
+                        <p className="text-xs text-muted-foreground">{r.puesto || 'Sin puesto'} • {formatDate(r.fecha)}</p>
                       </div>
                     </div>
                   </div>
@@ -253,13 +251,13 @@ export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListPr
                   </div>
                 </CardHeader>
                 <CardContent className="flex-1 pb-4">
-                  <div className="mb-4 text-sm bg-muted/40 p-3 rounded-md border border-border/50">
-                    <p className="font-semibold text-foreground mb-1">{r.motivo}</p>
-                    <div className="flex items-start gap-1.5 text-muted-foreground">
-                      <Map className="size-4 shrink-0 mt-0.5 text-primary/70" />
-                      <span className="line-clamp-2 leading-relaxed text-xs">{r.rutas}</span>
+                  {r.fuelRequestFolio && (
+                    <div className="mb-4 text-sm bg-primary/5 p-3 rounded-md border border-primary/20 flex items-center gap-1.5">
+                      <Fuel className="size-4 shrink-0 text-primary/70" />
+                      <span className="text-xs text-muted-foreground">Vinculado a Combustible:</span>
+                      <span className="text-xs font-semibold font-mono">{r.fuelRequestFolio}</span>
                     </div>
-                  </div>
+                  )}
 
                   {r.estado === 'RECHAZADA' && r.observacionesRechazo && (
                     <div className="mb-4 text-sm bg-red-50 dark:bg-red-950/20 p-3 rounded-md border border-red-200 dark:border-red-900/40">
@@ -268,30 +266,37 @@ export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListPr
                     </div>
                   )}
 
-                  <div className="grid grid-cols-3 gap-y-4 gap-x-2 text-sm mt-2">
-                    <div className="space-y-1">
-                      <p className="text-muted-foreground text-[10px] uppercase font-bold tracking-wider">Gasolina</p>
-                      <p className="flex items-center gap-1.5 font-medium">
-                        <Fuel className="size-3.5 text-muted-foreground" />
-                        {r.tipoGasolina}
-                      </p>
-                      <p className="text-xs text-muted-foreground">{r.litrosSolicitados.toFixed(1)} L</p>
+                  {r.asociadoPedido && r.folioPedido && (
+                    <div className="mb-4 text-sm bg-muted/40 p-3 rounded-md border border-border/50 flex items-center gap-1.5">
+                      <FileText className="size-4 shrink-0 text-primary/70" />
+                      <span className="text-xs text-muted-foreground">Folio de pedido:</span>
+                      <span className="text-xs font-semibold">{r.folioPedido}</span>
                     </div>
-                    <div className="space-y-1">
-                      <p className="text-muted-foreground text-[10px] uppercase font-bold tracking-wider">Distancia</p>
-                      <p className="flex items-center gap-1.5 font-medium">
-                        <Map className="size-3.5 text-muted-foreground" />
-                        {new Intl.NumberFormat().format(r.kmHolgura)} km
-                      </p>
-                      <p className="text-xs text-muted-foreground">{r.rendimiento} km/l</p>
-                    </div>
-                    <div className="space-y-1 border-l pl-3 border-border/50">
-                      <p className="text-muted-foreground text-[10px] uppercase font-bold tracking-wider">Costo Total</p>
-                      <p className="flex items-center gap-1.5 font-bold text-base text-emerald-600 dark:text-emerald-400">
-                        {formatCurrency(r.costoTotal)}
-                      </p>
-                      <p className="text-[10px] text-muted-foreground">{r.numCasetas ? `+${r.numCasetas} Casetas` : 'Sin peajes'}</p>
-                    </div>
+                  )}
+
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {r.incluyeComida && (
+                      <Badge variant="outline" className="gap-1.5 font-normal">
+                        <Utensils className="size-3" /> Comida
+                      </Badge>
+                    )}
+                    {r.incluyeHospedaje && (
+                      <Badge variant="outline" className="gap-1.5 font-normal">
+                        <BedDouble className="size-3" /> Hospedaje ({r.numNoches} noches)
+                      </Badge>
+                    )}
+                    {r.incluyeTransporte && (
+                      <Badge variant="outline" className="gap-1.5 font-normal">
+                        <Car className="size-3" /> Transporte
+                      </Badge>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between mt-2 pt-2">
+                    <p className="text-muted-foreground text-[10px] uppercase font-bold tracking-wider">Costo Total</p>
+                    <p className="flex items-center gap-1.5 font-bold text-lg text-emerald-600 dark:text-emerald-400">
+                      {formatCurrency(r.costoTotal)}
+                    </p>
                   </div>
 
                   {/* Botones de acción inferior */}
@@ -302,7 +307,7 @@ export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListPr
                         Generar PDF
                       </Button>
                     </div>
-                    
+
                     {r.estado === 'PENDIENTE' && !isConductor && (
                       <div className="flex gap-2 w-full sm:w-auto">
                         <Button
@@ -348,11 +353,10 @@ export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListPr
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Vehículo</TableHead>
                   <TableHead>Solicitante</TableHead>
-                  <TableHead>Motivo y Ruta</TableHead>
-                  <TableHead>Gasolina</TableHead>
-                  <TableHead>Distancia</TableHead>
+                  <TableHead>Puesto</TableHead>
+                  <TableHead>Fecha</TableHead>
+                  <TableHead>Rubros</TableHead>
                   <TableHead>Costo Total</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
@@ -374,37 +378,38 @@ export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListPr
                         <div className="flex items-center gap-3">
                           <Avatar className="size-9 rounded-md bg-muted p-1 shrink-0">
                             <AvatarFallback className="rounded-md bg-transparent text-primary">
-                              <Fuel className="size-4" />
+                              <Wallet className="size-4" />
                             </AvatarFallback>
                           </Avatar>
                           <div className="flex flex-col">
-                            <span className="font-medium text-sm truncate max-w-[180px]">{r.vehiculo?.nombreInterno || 'Vehículo Desconocido'}</span>
+                            <span className="font-medium text-sm truncate max-w-[160px]">{r.solicitanteNombre || 'Sin nombre'}</span>
                             {r.folio && <span className="text-[10px] font-mono text-muted-foreground">{r.folio}</span>}
                           </div>
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="flex flex-col text-sm">
-                          <span className="font-medium">{r.solicitanteNombre || 'Sin nombre'}</span>
-                          <span className="text-xs text-muted-foreground">{formatDate(r.fechaSolicitud)}</span>
-                        </div>
+                        <span className="text-sm">{r.puesto || 'Sin puesto'}</span>
                       </TableCell>
                       <TableCell>
-                        <div className="flex flex-col text-sm max-w-[220px]">
-                          <span className="font-medium truncate">{r.motivo}</span>
-                          <span className="text-xs text-muted-foreground truncate">{r.rutas}</span>
-                        </div>
+                        <span className="text-sm">{formatDate(r.fecha)}</span>
                       </TableCell>
                       <TableCell>
-                        <div className="flex flex-col text-sm">
-                          <span>{r.tipoGasolina}</span>
-                          <span className="text-xs text-muted-foreground">{r.litrosSolicitados.toFixed(1)} L</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col text-sm">
-                          <span>{new Intl.NumberFormat().format(r.kmHolgura)} km</span>
-                          <span className="text-xs text-muted-foreground">{r.numCasetas ? `+${r.numCasetas} Casetas` : 'Sin peajes'}</span>
+                        <div className="flex flex-wrap gap-1.5 max-w-[220px]">
+                          {r.incluyeComida && (
+                            <Badge variant="outline" className="gap-1 font-normal text-[10px]">
+                              <Utensils className="size-2.5" /> Comida
+                            </Badge>
+                          )}
+                          {r.incluyeHospedaje && (
+                            <Badge variant="outline" className="gap-1 font-normal text-[10px]">
+                              <BedDouble className="size-2.5" /> Hospedaje
+                            </Badge>
+                          )}
+                          {r.incluyeTransporte && (
+                            <Badge variant="outline" className="gap-1 font-normal text-[10px]">
+                              <Car className="size-2.5" /> Transporte
+                            </Badge>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell>

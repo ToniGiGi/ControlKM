@@ -214,12 +214,15 @@ model Expense {
 
 model FuelRequest {
   id                String        @id @default(cuid())
+  folio             String?       @unique
   vehiculoId        String
   vehiculo          Vehicle       @relation(fields: [vehiculoId], references: [id], onDelete: Cascade)
-  
+
   // Auditoria
   solicitanteNombre String?
   fechaSolicitud    DateTime      @default(now())
+  firmaSolicitanteUrl String?
+  firmaAprobadorUrl   String?
   
   // Datos Excel
   motivo            String
@@ -252,6 +255,8 @@ model FuelRequest {
   departamentoId    String?
   departamentoRef   Department? @relation(fields: [departamentoId], references: [id], onDelete: SetNull)
 
+  observacionesRechazo String?
+
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 
@@ -261,6 +266,56 @@ model FuelRequest {
   @@index([departamentoId])
 }
 
+model TravelRequest {
+  id                String   @id @default(cuid())
+  folio             String?  @unique
+  empleadoId        String?
+  solicitanteNombre String
+  puesto            String?
+  fecha             DateTime @default(now())
+  asociadoPedido    Boolean  @default(false)
+  folioPedido       String?
+
+  // Folio de una solicitud de Combustible a la que este viaje está ligado (opcional)
+  fuelRequestFolio  String?
+
+  // Comida: desayuno/comida/cena, $100 c/u, + partida personalizada con monto propio
+  incluyeComida             Boolean @default(false)
+  numDesayunos              Int     @default(0)
+  numComidas                Int     @default(0)
+  numCenas                  Int     @default(0)
+  numPersonalizadoComida    Int     @default(0)
+  precioPersonalizadoComida Float   @default(0)
+  costoComida               Float   @default(0)
+
+  // Hospedaje: $850 por noche, + partida personalizada con monto propio
+  incluyeHospedaje              Boolean @default(false)
+  numNoches                     Int     @default(0)
+  numPersonalizadoHospedaje     Int     @default(0)
+  precioPersonalizadoHospedaje  Float   @default(0)
+  costoHospedaje                Float   @default(0)
+
+  // Transporte: monto manual por tipo
+  incluyeTransporte  Boolean @default(false)
+  transporteUberDidi Float   @default(0)
+  transporteAutobus  Float   @default(0)
+  transporteTaxi     Float   @default(0) // deprecated: la opción de Taxi se quitó del formulario, se mantiene por compatibilidad histórica
+  costoTransporte    Float   @default(0)
+
+  costoTotal Float  @default(0)
+  estado     String @default("PENDIENTE")
+
+  firmaSolicitanteUrl String?
+  firmaAprobadorUrl   String?
+  observacionesRechazo String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([estado])
+  @@index([empleadoId])
+  @@index([fecha])
+}
 
 model Branch {
   id        String   @id @default(cuid())
@@ -293,6 +348,11 @@ model OrganizationConfig {
   id        String   @id @default("default")
   name      String   @default("Mi Organización")
   logoUrl   String?
+
+  // Contadores para folios secuenciales (QRQ-C-0001, QRQ-V-0001, ...)
+  lastFuelFolio   Int @default(0)
+  lastTravelFolio Int @default(0)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

@@ -4,6 +4,19 @@ import { getPrisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import { hashPassword } from '@/lib/password'
 
+// Genera folios secuenciales (QRQ-C-0001, QRQ-V-0001, ...) usando un contador
+// persistente en OrganizationConfig, para que nunca se reutilicen números aunque
+// se borren solicitudes.
+async function getNextFolio(prisma: ReturnType<typeof getPrisma>, field: 'lastFuelFolio' | 'lastTravelFolio', prefix: string) {
+  const config = await prisma.organizationConfig.upsert({
+    where: { id: 'default' },
+    update: { [field]: { increment: 1 } },
+    create: { id: 'default', [field]: 1 },
+  })
+  const n = (config as any)[field] as number
+  return `${prefix}-${String(n).padStart(4, '0')}`
+}
+
 export async function getVehicles() {
   const prisma = getPrisma()
   // Optimized: 4 parallel queries instead of 8 JOINs
@@ -495,6 +508,7 @@ export async function createFuelRequest(data: any) {
   const prisma = getPrisma()
   const { vehiculoId, ...rest } = data
   if (!rest.departamentoId || rest.departamentoId === 'unassigned') rest.departamentoId = null
+  const folio = await getNextFolio(prisma, 'lastFuelFolio', 'QRQ-C')
   // vehiculoId se pasa como campo escalar (no vehiculo: { connect }) porque Prisma no
   // permite mezclar el estilo "checked" (relación anidada) con el estilo "unchecked"
   // (departamentoId como escalar) en la misma llamada a create().
@@ -502,6 +516,7 @@ export async function createFuelRequest(data: any) {
     data: {
       ...rest,
       vehiculoId,
+      folio,
     },
     include: { vehiculo: true }
   })
@@ -523,19 +538,71 @@ export async function deleteFuelRequest(id: string) {
   return req
 }
 
-export async function approveFuelRequest(id: string) {
+export async function approveFuelRequest(id: string, firmaAprobadorUrl?: string) {
   const prisma = getPrisma()
-  const req = await prisma.fuelRequest.update({ where: { id }, data: { estado: 'APROBADA' } })
+  const req = await prisma.fuelRequest.update({
+    where: { id },
+    data: { estado: 'APROBADA', ...(firmaAprobadorUrl ? { firmaAprobadorUrl } : {}) }
+  })
   revalidatePath('/combustible')
   revalidatePath('/vehiculos')
   return req
 }
 
-export async function rejectFuelRequest(id: string) {
+export async function rejectFuelRequest(id: string, observacionesRechazo?: string) {
   const prisma = getPrisma()
-  const req = await prisma.fuelRequest.update({ where: { id }, data: { estado: 'RECHAZADA' } })
+  const req = await prisma.fuelRequest.update({
+    where: { id },
+    data: { estado: 'RECHAZADA', observacionesRechazo: observacionesRechazo || null }
+  })
   revalidatePath('/combustible')
   revalidatePath('/vehiculos')
+  return req
+}
+
+// --- Travel Requests (Viáticos) ---
+
+export async function getTravelRequests() {
+  const prisma = getPrisma()
+  const requests = await prisma.travelRequest.findMany({
+    orderBy: { fecha: 'desc' },
+    take: 1000,
+  })
+  return requests
+}
+
+export async function createTravelRequest(data: any) {
+  const prisma = getPrisma()
+  const folio = await getNextFolio(prisma, 'lastTravelFolio', 'QRQ-V')
+  const req = await prisma.travelRequest.create({ data: { ...data, folio } })
+  revalidatePath('/viaticos')
+  return req
+}
+
+export async function deleteTravelRequest(id: string) {
+  const prisma = getPrisma()
+  const req = await prisma.travelRequest.delete({ where: { id } })
+  revalidatePath('/viaticos')
+  return req
+}
+
+export async function approveTravelRequest(id: string, firmaAprobadorUrl?: string) {
+  const prisma = getPrisma()
+  const req = await prisma.travelRequest.update({
+    where: { id },
+    data: { estado: 'APROBADA', ...(firmaAprobadorUrl ? { firmaAprobadorUrl } : {}) }
+  })
+  revalidatePath('/viaticos')
+  return req
+}
+
+export async function rejectTravelRequest(id: string, observacionesRechazo?: string) {
+  const prisma = getPrisma()
+  const req = await prisma.travelRequest.update({
+    where: { id },
+    data: { estado: 'RECHAZADA', observacionesRechazo: observacionesRechazo || null }
+  })
+  revalidatePath('/viaticos')
   return req
 }
 

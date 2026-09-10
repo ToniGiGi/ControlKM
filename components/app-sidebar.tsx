@@ -10,6 +10,7 @@ import {
   ShieldCheck,
   Wrench,
   Fuel,
+  Wallet,
   Receipt,
   TriangleAlert,
   FileText,
@@ -46,6 +47,7 @@ const operacion: NavItem[] = [
   { label: 'Seguros', href: '/seguros', icon: ShieldCheck, disabled: false },
   { label: 'Mantenimientos', href: '/mantenimientos', icon: Wrench, disabled: false },
   { label: 'Combustible', href: '/combustible', icon: Fuel, disabled: false },
+  { label: 'Viáticos', href: '/viaticos', icon: Wallet, disabled: false },
   { label: 'Gastos', href: '/gastos', icon: Receipt, disabled: false },
   { label: 'Incidencias', href: '/incidencias', icon: TriangleAlert, disabled: false },
   { label: 'Viajes', href: '/viajes', icon: Route, disabled: false },
@@ -56,6 +58,7 @@ const operacionConductor: NavItem[] = [
   { label: 'Mi Seguro', href: '/seguros', icon: ShieldCheck, disabled: false },
   { label: 'Mis Mantenimientos', href: '/mantenimientos', icon: Wrench, disabled: false },
   { label: 'Combustible', href: '/combustible', icon: Fuel, disabled: false },
+  { label: 'Viáticos', href: '/viaticos', icon: Wallet, disabled: false },
   { label: 'Mis Gastos', href: '/gastos', icon: Receipt, disabled: false },
 ]
 
