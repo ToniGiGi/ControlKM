@@ -13,10 +13,21 @@ export function FuelPdfDocument({ data, onClose }: FuelPdfDocumentProps) {
   
   // Formatters
   const formatDate = (d: any) => d ? new Intl.DateTimeFormat('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(d)) : ''
+  const formatLongDate = (d: any) => d ? new Intl.DateTimeFormat('es-MX', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(d)) : ''
   const formatMoney = (val: number) => `$ ${Number(val || 0).toFixed(2)}`
   const formatNumber = (val: number) => Number(val || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
   const handlePrint = () => {
+    const previousTitle = document.title
+    const solicitante = (data.solicitanteNombre || 'Solicitud').trim()
+    document.title = `SDC - ${solicitante}`
+
+    const restoreTitle = () => {
+      document.title = previousTitle
+      window.removeEventListener('afterprint', restoreTitle)
+    }
+    window.addEventListener('afterprint', restoreTitle)
+
     window.print()
   }
 
@@ -62,19 +73,25 @@ export function FuelPdfDocument({ data, onClose }: FuelPdfDocumentProps) {
             </tr>
             <tr>
               <td className="border border-black bg-gray-100 font-bold py-1">Titulo</td>
-              <td className="border border-black py-1">Solicitud de viáticos y combustible</td>
+              <td className="border border-black py-1">Solicitud de combustible</td>
               <td className="border border-black bg-gray-100 font-bold py-1">Código</td>
               <td className="border border-black py-1" colSpan={2}>FC-ALM-001.01</td>
             </tr>
             <tr>
               <td className="border border-black bg-gray-100 font-bold py-1">Fecha elaboración</td>
-              <td className="border border-black py-1">Julio 2026</td>
+              <td className="border border-black py-1">{formatLongDate(data.fechaSolicitud) || 'Julio 2026'}</td>
               <td className="border border-black bg-gray-100 font-bold py-1">Vigencia</td>
               <td className="border border-black py-1">Julio 2027</td>
               <td className="border border-black bg-gray-100 font-bold py-1 w-[10%]">Versión 3.0</td>
             </tr>
           </tbody>
         </table>
+
+        {data.folio && (
+          <div className="flex justify-end mb-2">
+            <span className="border border-black bg-gray-100 font-bold font-mono px-3 py-1 text-xs">Folio: {data.folio}</span>
+          </div>
+        )}
 
         {/* DATOS GENERALES */}
         <table className="w-full border-collapse border border-black mb-0">
@@ -165,19 +182,24 @@ export function FuelPdfDocument({ data, onClose }: FuelPdfDocumentProps) {
         </table>
 
         {/* SECCIÓN DE FIRMAS */}
-        <div className="mt-20 grid grid-cols-3 gap-8 text-center">
+        <div className="mt-16 grid grid-cols-2 gap-16 text-center px-12">
           <div>
-            <div className="border-b border-black mb-2 mx-4 h-8"></div>
+            <div className="h-14 flex items-end justify-center">
+              {data.firmaSolicitanteUrl && (
+                <img src={data.firmaSolicitanteUrl} alt="Firma del solicitante" className="max-h-14 object-contain" />
+              )}
+            </div>
+            <div className="border-b border-black mb-2 mx-4"></div>
             <p className="font-bold text-xs">Solicita</p>
             <p className="text-[10px] uppercase">{data.solicitanteNombre}</p>
           </div>
           <div>
-            <div className="border-b border-black mb-2 mx-4 h-8"></div>
-            <p className="font-bold text-xs">Revisa</p>
-            <p className="text-[10px]">Supervisor de Flotilla</p>
-          </div>
-          <div>
-            <div className="border-b border-black mb-2 mx-4 h-8"></div>
+            <div className="h-14 flex items-end justify-center">
+              {data.firmaAprobadorUrl && (
+                <img src={data.firmaAprobadorUrl} alt="Firma del aprobador" className="max-h-14 object-contain" />
+              )}
+            </div>
+            <div className="border-b border-black mb-2 mx-4"></div>
             <p className="font-bold text-xs">Autoriza</p>
             <p className="text-[10px]">Administrador General</p>
           </div>

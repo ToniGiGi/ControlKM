@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { X, Map, Fuel, Calculator, Banknote, CreditCard, Tag } from 'lucide-react'
+import { X, Map, Fuel, Calculator, Banknote, CreditCard, Tag, Navigation } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -10,6 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent } from '@/components/ui/card'
 import { createFuelRequest } from '@/app/actions/db'
 import { useRole } from '@/components/role-provider'
+import { RouteMap } from './route-map'
+import { SignatureModal } from '@/components/shared/signature-modal'
 
 const GAS_PRICES = {
   VERDE: 23.79,
@@ -98,6 +100,12 @@ export function FuelRequestForm({ vehicles, departments }: FuelRequestFormProps)
   const [rendimiento, setRendimiento] = useState<number>(10)
   const [tipoGasolina, setTipoGasolina] = useState<keyof typeof GAS_PRICES>('VERDE')
   
+  // Mapa
+  const [mapCoordinates, setMapCoordinates] = useState<[number, number][]>([])
+  const [mapMarkers, setMapMarkers] = useState<{lat: number, lng: number, title: string, role?: 'origen' | 'destino'}[]>([])
+  const [isCalculatingRoute, setIsCalculatingRoute] = useState(false)
+  const [activeLegIndex, setActiveLegIndex] = useState<number | null>(null)
+  
   // Extras
   const [numCasetas, setNumCasetas] = useState<number | ''>('')
   const [costoCasetas, setCostoCasetas] = useState<number | ''>('')
@@ -136,6 +144,102 @@ export function FuelRequestForm({ vehicles, departments }: FuelRequestFormProps)
     }
   }
 
+  const geocode = async (address: string) => {
+    const query = encodeURIComponent(`${address}, Mexico`);
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1`);
+    const data = await res.json();
+    if (data && data.length > 0) {
+      return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+    }
+    const fallbackRes = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1`);
+    const fallbackData = await fallbackRes.json();
+    if (fallbackData && fallbackData.length > 0) {
+      return { lat: parseFloat(fallbackData[0].lat), lon: parseFloat(fallbackData[0].lon) };
+    }
+    return null;
+  }
+
+  const getRouteInfo = async (coord1: {lat: number, lon: number}, coord2: {lat: number, lon: number}) => {
+    const res = await fetch(`https://router.project-osrm.org/route/v1/driving/${coord1.lon},${coord1.lat};${coord2.lon},${coord2.lat}?overview=full&geometries=geojson`);
+    const data = await res.json();
+    if (data.code === 'Ok' && data.routes.length > 0) {
+      const route = data.routes[0];
+      const distanceKm = route.distance / 1000;
+      const coordinates = route.geometry.coordinates.map((c: number[]) => [c[1], c[0]] as [number, number]);
+      return { distanceKm, coordinates };
+    }
+    return null;
+  }
+
+  const calculateLegRoute = async (index: number) => {
+    const leg = routeLegs[index];
+    if (!leg.origen || !leg.destino) {
+      alert("Por favor ingresa Origen y Destino primero.");
+      return;
+    }
+    
+    setIsCalculatingRoute(true);
+    try {
+      const origCoord = await geocode(leg.origen);
+      const destCoord = await geocode(leg.destino);
+      
+      if (!origCoord || !destCoord) {
+        alert("No se pudo encontrar las coordenadas de Origen o Destino en el mapa. Revisa la escritura.");
+        return;
+      }
+
+      const routeInfo = await getRouteInfo(origCoord, destCoord);
+      if (routeInfo) {
+        updateRouteLeg(index, 'km', Math.round(routeInfo.distanceKm));
+
+        setMapCoordinates(routeInfo.coordinates);
+        setMapMarkers([
+          { lat: origCoord.lat, lng: origCoord.lon, title: `Origen: ${leg.origen}`, role: 'origen' },
+          { lat: destCoord.lat, lng: destCoord.lon, title: `Destino: ${leg.destino}`, role: 'destino' }
+        ]);
+        setActiveLegIndex(index);
+      } else {
+        alert("No se pudo trazar una ruta en carretera entre estos puntos.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Hubo un error al conectar con el servidor de mapas.");
+    } finally {
+      setIsCalculatingRoute(false);
+    }
+  }
+
+  const handleMarkerDragEnd = async (role: 'origen' | 'destino', lat: number, lng: number) => {
+    if (activeLegIndex === null) return;
+    const otherRole = role === 'origen' ? 'destino' : 'origen';
+    const otherMarker = mapMarkers.find(m => m.role === otherRole);
+    if (!otherMarker) return;
+
+    const updatedMarkers = mapMarkers.map(m =>
+      m.role === role ? { ...m, lat, lng } : m
+    );
+    setMapMarkers(updatedMarkers);
+
+    setIsCalculatingRoute(true);
+    try {
+      const origCoord = role === 'origen' ? { lat, lon: lng } : { lat: otherMarker.lat, lon: otherMarker.lng };
+      const destCoord = role === 'destino' ? { lat, lon: lng } : { lat: otherMarker.lat, lon: otherMarker.lng };
+
+      const routeInfo = await getRouteInfo(origCoord, destCoord);
+      if (routeInfo) {
+        setMapCoordinates(routeInfo.coordinates);
+        updateRouteLeg(activeLegIndex, 'km', Math.round(routeInfo.distanceKm));
+      } else {
+        alert("No se pudo trazar una ruta en carretera desde el punto ajustado.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Hubo un error al recalcular la ruta.");
+    } finally {
+      setIsCalculatingRoute(false);
+    }
+  }
+
   // Motor de Calculadora Inteligente
   useEffect(() => {
     // Calcular KM base sumando las rutas (redondo multiplica x2)
@@ -161,10 +265,18 @@ export function FuelRequestForm({ vehicles, departments }: FuelRequestFormProps)
     setGranTotal(cGas + cCasetas)
   }, [routeLegs, holgura, rendimiento, tipoGasolina, costoCasetas])
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const [showSignatureModal, setShowSignatureModal] = useState(false)
+
+  // El submit del <form> solo dispara la validación nativa (campos required) y,
+  // si pasa, abre el modal de firma. La creación real ocurre al confirmar la firma.
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    setShowSignatureModal(true)
+  }
+
+  const handleConfirmSignature = async (firmaSolicitanteUrl: string) => {
     setIsSubmitting(true)
-    
+
     // Construir string de rutas para la BD
     const rutasString = routeLegs
       .map(l => `${l.origen || '?'} - ${l.destino || '?'} (${l.tipo})`)
@@ -193,9 +305,10 @@ export function FuelRequestForm({ vehicles, departments }: FuelRequestFormProps)
         costoCasetas: costoCasetas || 0,
         costoComidas: 0,
         costoTotal: granTotal,
-        estado: 'PENDIENTE'
+        estado: 'PENDIENTE',
+        firmaSolicitanteUrl,
       })
-      
+
       router.push('/combustible')
       router.refresh()
     } catch (err) {
@@ -209,10 +322,11 @@ export function FuelRequestForm({ vehicles, departments }: FuelRequestFormProps)
   const formatMoney = (val: number) => `$ ${val.toFixed(2)}`
 
   return (
+    <>
     <Card className="border-t-4 border-t-primary shadow-sm">
       <CardContent className="p-6">
         <form onSubmit={handleSubmit} className="space-y-10">
-          
+
           {/* SECCIÓN 1: DATOS GENERALES */}
           <section className="space-y-5">
             <div className="border-b pb-2">
@@ -334,7 +448,7 @@ export function FuelRequestForm({ vehicles, departments }: FuelRequestFormProps)
                     <Label className="text-xs">Destino <span className="text-destructive">*</span></Label>
                     <Input required placeholder="Ej. Xalapa" value={leg.destino} onChange={e => updateRouteLeg(index, 'destino', e.target.value)} />
                   </div>
-                  <div className="w-full sm:w-48 flex flex-col justify-end gap-1.5">
+                  <div className="w-full sm:w-40 flex flex-col justify-end gap-1.5">
                     <Label className="text-xs whitespace-nowrap">Tipo de Viaje</Label>
                     <Select value={leg.tipo} onValueChange={v => updateRouteLeg(index, 'tipo', v)}>
                       <SelectTrigger><SelectValue/></SelectTrigger>
@@ -344,9 +458,15 @@ export function FuelRequestForm({ vehicles, departments }: FuelRequestFormProps)
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="w-full sm:w-36 flex flex-col justify-end gap-1.5">
+                  <div className="w-full sm:w-32 flex flex-col justify-end gap-1.5">
                     <Label className="text-xs whitespace-nowrap">Distancia (km) <span className="text-destructive">*</span></Label>
                     <Input required type="number" min="1" placeholder="km" value={leg.km} onChange={e => updateRouteLeg(index, 'km', e.target.value ? Number(e.target.value) : '')} />
+                  </div>
+                  <div className="flex flex-col justify-end pb-[2px]">
+                    <Button type="button" variant="secondary" className="gap-2 shrink-0" onClick={() => calculateLegRoute(index)} disabled={isCalculatingRoute}>
+                      <Navigation className="size-4" />
+                      <span className="hidden xl:inline">Calcular</span>
+                    </Button>
                   </div>
                   {routeLegs.length > 1 && (
                     <div className="flex flex-col justify-end">
@@ -362,7 +482,18 @@ export function FuelRequestForm({ vehicles, departments }: FuelRequestFormProps)
               </Button>
             </div>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-2">
+            {/* Mapa Preview */}
+            <div className="w-full pt-4 space-y-2">
+              <RouteMap routeCoordinates={mapCoordinates} markers={mapMarkers} onMarkerDragEnd={handleMarkerDragEnd} />
+              {mapMarkers.length > 0 && (
+                <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                  <Navigation className="size-3.5" />
+                  Si el punto no es exacto, arrastra los marcadores azul (origen) y rojo (destino) en el mapa para ajustarlos. Los km se recalculan automáticamente.
+                </p>
+              )}
+            </div>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4">
               <div className="flex flex-col justify-end gap-2">
                 <Label>Holgura extra total (Km) (Opcional)</Label>
                 <Input type="number" value={holgura} onChange={e => setHolgura(Number(e.target.value))} />
@@ -433,11 +564,21 @@ export function FuelRequestForm({ vehicles, departments }: FuelRequestFormProps)
           <div className="pt-6 flex justify-end gap-4 border-t">
             <Button type="button" variant="outline" onClick={() => router.push('/combustible')} disabled={isSubmitting}>Cancelar</Button>
             <Button type="submit" disabled={isSubmitting} className="min-w-[200px] text-base h-11">
-              {isSubmitting ? 'Guardando...' : 'Generar Solicitud'}
+              {isSubmitting ? 'Guardando...' : 'Firmar y Generar Solicitud'}
             </Button>
           </div>
         </form>
       </CardContent>
     </Card>
+
+    <SignatureModal
+      open={showSignatureModal}
+      onOpenChange={setShowSignatureModal}
+      title="Firma del Solicitante"
+      description="Dibuja tu firma para confirmar y enviar la solicitud de combustible."
+      confirmLabel="Firmar y Enviar"
+      onConfirm={handleConfirmSignature}
+    />
+    </>
   )
 }
