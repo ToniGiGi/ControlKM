@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useState, useMemo, useEffect } from 'react'
-import { Plus, Search, Fuel, CreditCard, Banknote, Map, CheckCircle, XCircle, FileDown, Trash2, LayoutGrid, List } from 'lucide-react'
+import { Plus, Search, Fuel, CreditCard, Banknote, Map, CheckCircle, XCircle, FileDown, Trash2, LayoutGrid, List, FileSpreadsheet } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -24,6 +24,7 @@ import { RejectModal } from '@/components/shared/reject-modal'
 import { approveFuelRequest, rejectFuelRequest, payFuelRequest, deleteFuelRequest } from '@/app/actions/db'
 import { useRole } from '@/components/role-provider'
 import { ListPagination } from '@/components/ui/list-pagination'
+import { exportRowsToExcel } from '@/lib/excel-export'
 
 const PAGE_SIZE = 12
 
@@ -38,6 +39,8 @@ export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListPr
   const [requests, setRequests] = useState(initialRequests)
   const [query, setQuery] = useState('')
   const [estado, setEstado] = useState('todos')
+  const [fechaDesde, setFechaDesde] = useState('')
+  const [fechaHasta, setFechaHasta] = useState('')
   const [view, setView] = useState<'grid' | 'table'>('grid')
   const [page, setPage] = useState(1)
 
@@ -103,12 +106,12 @@ export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListPr
   const filtered = useMemo(() => {
     return requests.filter((r) => {
       const v = r.vehiculo || vehicles.find(v => v.id === r.vehiculoId)
-      
+
       // Si es conductor, solo mostrar las de su vehículo
       if (isConductor && v?.empleadoId !== config.empleadoId) {
         return false
       }
-      
+
       const q = query.toLowerCase()
       const matchQ =
         !q ||
@@ -117,9 +120,41 @@ export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListPr
           .toLowerCase()
           .includes(q)
       const matchEstado = estado === 'todos' || r.estado === estado.toUpperCase()
-      return matchQ && matchEstado
+
+      const fecha = r.fechaSolicitud ? new Date(r.fechaSolicitud) : null
+      const matchDesde = !fechaDesde || (fecha && fecha >= new Date(`${fechaDesde}T00:00:00`))
+      const matchHasta = !fechaHasta || (fecha && fecha <= new Date(`${fechaHasta}T23:59:59`))
+
+      return matchQ && matchEstado && matchDesde && matchHasta
     })
-  }, [requests, query, estado, vehicles])
+  }, [requests, query, estado, fechaDesde, fechaHasta, vehicles])
+
+  const handleExportExcel = () => {
+    exportRowsToExcel(
+      filtered,
+      [
+        { header: 'Folio', value: (r) => r.folio || '', width: 14 },
+        { header: 'Fecha', value: (r) => r.fechaSolicitud ? new Date(r.fechaSolicitud) : '', width: 12, format: 'dd/mm/yyyy' },
+        { header: 'Solicitante', value: (r) => r.solicitanteNombre || '', width: 22 },
+        { header: 'Vehículo', value: (r) => r.vehiculo?.nombreInterno || '', width: 20 },
+        { header: 'Placas', value: (r) => r.vehiculo?.placas || '', width: 12 },
+        { header: 'Motivo', value: (r) => r.motivo || '', width: 28 },
+        { header: 'Ruta', value: (r) => r.rutas || '', width: 32 },
+        { header: 'Km Total', value: (r) => r.kmHolgura ?? 0, width: 10 },
+        { header: 'Tipo Gasolina', value: (r) => r.tipoGasolina || '', width: 12 },
+        { header: 'Litros', value: (r) => r.litrosSolicitados ?? 0, width: 10, format: '#,##0.00' },
+        { header: 'Costo Gasolina', value: (r) => r.costoGasolina ?? 0, width: 14, format: '$#,##0.00' },
+        { header: 'No. Casetas', value: (r) => r.numCasetas || 0, width: 10 },
+        { header: 'Costo Casetas', value: (r) => r.costoCasetas || 0, width: 14, format: '$#,##0.00' },
+        { header: 'Costo Total', value: (r) => r.costoTotal ?? 0, width: 14, format: '$#,##0.00' },
+        { header: 'Estado', value: (r) => r.estado || '', width: 12 },
+        { header: 'Fecha de Pago', value: (r) => r.fechaPago ? new Date(r.fechaPago) : '', width: 12, format: 'dd/mm/yyyy' },
+        { header: 'Observaciones de Rechazo', value: (r) => r.observacionesRechazo || '', width: 30 },
+      ],
+      'Combustible',
+      `Solicitudes_Combustible_${new Date().toISOString().slice(0, 10)}.xlsx`
+    )
+  }
 
   useEffect(() => { setPage(1) }, [query, estado])
 
@@ -180,22 +215,45 @@ export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListPr
         title="Solicitudes de Combustible"
         description={`${filtered.length} viáticos gestionados`}
       >
-        <Link href="/combustible/nueva">
-          <Button className="gap-2">
-            <Plus className="size-4" />
-            Nueva Solicitud
+        <div className="flex gap-2">
+          <Button variant="outline" className="gap-2" onClick={handleExportExcel} disabled={filtered.length === 0}>
+            <FileSpreadsheet className="size-4" />
+            Exportar Excel
           </Button>
-        </Link>
+          <Link href="/combustible/nueva">
+            <Button className="gap-2">
+              <Plus className="size-4" />
+              Nueva Solicitud
+            </Button>
+          </Link>
+        </div>
       </PageHeader>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="relative flex-1">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+        <div className="relative flex-1 min-w-[200px]">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Buscar por vehículo, solicitante, ruta o motivo..."
             className="pl-9"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <Input
+            type="date"
+            value={fechaDesde}
+            onChange={(e) => setFechaDesde(e.target.value)}
+            className="w-full sm:w-[150px]"
+            aria-label="Fecha desde"
+          />
+          <span className="text-sm text-muted-foreground shrink-0">a</span>
+          <Input
+            type="date"
+            value={fechaHasta}
+            onChange={(e) => setFechaHasta(e.target.value)}
+            className="w-full sm:w-[150px]"
+            aria-label="Fecha hasta"
           />
         </div>
         <Select value={estado} onValueChange={(v) => setEstado(v || "")}>

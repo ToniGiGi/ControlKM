@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useState, useMemo, useEffect } from 'react'
-import { Plus, Search, Wallet, Utensils, BedDouble, Car, CheckCircle, XCircle, FileDown, Trash2, FileText, Fuel, LayoutGrid, List, Banknote } from 'lucide-react'
+import { Plus, Search, Wallet, Utensils, BedDouble, Car, CheckCircle, XCircle, FileDown, Trash2, FileText, Fuel, LayoutGrid, List, Banknote, FileSpreadsheet } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -24,6 +24,7 @@ import { RejectModal } from '@/components/shared/reject-modal'
 import { approveTravelRequest, rejectTravelRequest, payTravelRequest, deleteTravelRequest } from '@/app/actions/db'
 import { useRole } from '@/components/role-provider'
 import { ListPagination } from '@/components/ui/list-pagination'
+import { exportRowsToExcel } from '@/lib/excel-export'
 
 const PAGE_SIZE = 12
 
@@ -38,6 +39,8 @@ export function TravelRequestList({ initialRequests }: TravelRequestListProps) {
   const [requests, setRequests] = useState(initialRequests)
   const [query, setQuery] = useState('')
   const [estado, setEstado] = useState('todos')
+  const [fechaDesde, setFechaDesde] = useState('')
+  const [fechaHasta, setFechaHasta] = useState('')
   const [view, setView] = useState<'grid' | 'table'>('grid')
   const [page, setPage] = useState(1)
 
@@ -115,9 +118,43 @@ export function TravelRequestList({ initialRequests }: TravelRequestListProps) {
           .toLowerCase()
           .includes(q)
       const matchEstado = estado === 'todos' || r.estado === estado.toUpperCase()
-      return matchQ && matchEstado
+
+      const fecha = r.fecha ? new Date(r.fecha) : null
+      const matchDesde = !fechaDesde || (fecha && fecha >= new Date(`${fechaDesde}T00:00:00`))
+      const matchHasta = !fechaHasta || (fecha && fecha <= new Date(`${fechaHasta}T23:59:59`))
+
+      return matchQ && matchEstado && matchDesde && matchHasta
     })
-  }, [requests, query, estado, isConductor, config.empleadoId])
+  }, [requests, query, estado, fechaDesde, fechaHasta, isConductor, config.empleadoId])
+
+  const handleExportExcel = () => {
+    exportRowsToExcel(
+      filtered,
+      [
+        { header: 'Folio', value: (r) => r.folio || '', width: 14 },
+        { header: 'Fecha', value: (r) => r.fecha ? new Date(r.fecha) : '', width: 12, format: 'dd/mm/yyyy' },
+        { header: 'Solicitante', value: (r) => r.solicitanteNombre || '', width: 22 },
+        { header: 'Puesto / Área', value: (r) => r.puesto || '', width: 18 },
+        { header: 'Folio de Pedido', value: (r) => r.asociadoPedido ? (r.folioPedido || '') : '', width: 14 },
+        { header: 'Vinculado a Combustible', value: (r) => r.fuelRequestFolio || '', width: 18 },
+        { header: 'Desayunos', value: (r) => r.incluyeComida ? r.numDesayunos : '', width: 10 },
+        { header: 'Comidas', value: (r) => r.incluyeComida ? r.numComidas : '', width: 10 },
+        { header: 'Cenas', value: (r) => r.incluyeComida ? r.numCenas : '', width: 10 },
+        { header: 'Subtotal Comida', value: (r) => r.costoComida || 0, width: 14, format: '$#,##0.00' },
+        { header: 'Noches Hospedaje', value: (r) => r.incluyeHospedaje ? r.numNoches : '', width: 12 },
+        { header: 'Subtotal Hospedaje', value: (r) => r.costoHospedaje || 0, width: 16, format: '$#,##0.00' },
+        { header: 'Uber / Didi', value: (r) => r.transporteUberDidi || 0, width: 12, format: '$#,##0.00' },
+        { header: 'Autobús', value: (r) => r.transporteAutobus || 0, width: 12, format: '$#,##0.00' },
+        { header: 'Subtotal Transporte', value: (r) => r.costoTransporte || 0, width: 16, format: '$#,##0.00' },
+        { header: 'Costo Total', value: (r) => r.costoTotal ?? 0, width: 14, format: '$#,##0.00' },
+        { header: 'Estado', value: (r) => r.estado || '', width: 12 },
+        { header: 'Fecha de Pago', value: (r) => r.fechaPago ? new Date(r.fechaPago) : '', width: 12, format: 'dd/mm/yyyy' },
+        { header: 'Observaciones de Rechazo', value: (r) => r.observacionesRechazo || '', width: 30 },
+      ],
+      'Viáticos',
+      `Solicitudes_Viaticos_${new Date().toISOString().slice(0, 10)}.xlsx`
+    )
+  }
 
   useEffect(() => { setPage(1) }, [query, estado])
 
@@ -178,22 +215,45 @@ export function TravelRequestList({ initialRequests }: TravelRequestListProps) {
         title="Viáticos"
         description={`${filtered.length} solicitudes gestionadas`}
       >
-        <Link href="/viaticos/nueva">
-          <Button className="gap-2">
-            <Plus className="size-4" />
-            Nueva Solicitud
+        <div className="flex gap-2">
+          <Button variant="outline" className="gap-2" onClick={handleExportExcel} disabled={filtered.length === 0}>
+            <FileSpreadsheet className="size-4" />
+            Exportar Excel
           </Button>
-        </Link>
+          <Link href="/viaticos/nueva">
+            <Button className="gap-2">
+              <Plus className="size-4" />
+              Nueva Solicitud
+            </Button>
+          </Link>
+        </div>
       </PageHeader>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="relative flex-1">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+        <div className="relative flex-1 min-w-[200px]">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Buscar por solicitante, puesto o folio..."
             className="pl-9"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <Input
+            type="date"
+            value={fechaDesde}
+            onChange={(e) => setFechaDesde(e.target.value)}
+            className="w-full sm:w-[150px]"
+            aria-label="Fecha desde"
+          />
+          <span className="text-sm text-muted-foreground shrink-0">a</span>
+          <Input
+            type="date"
+            value={fechaHasta}
+            onChange={(e) => setFechaHasta(e.target.value)}
+            className="w-full sm:w-[150px]"
+            aria-label="Fecha hasta"
           />
         </div>
         <Select value={estado} onValueChange={(v) => setEstado(v || "")}>
