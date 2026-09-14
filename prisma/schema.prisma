@@ -223,7 +223,9 @@ model FuelRequest {
   fechaSolicitud    DateTime      @default(now())
   firmaSolicitanteUrl String?
   firmaAprobadorUrl   String?
-  
+  firmaPagoUrl        String? // firma de Cuentas por Pagar al entregar el dinero
+  fechaPago           DateTime?
+
   // Datos Excel
   motivo            String
   tarjetaToka       String?
@@ -307,6 +309,8 @@ model TravelRequest {
 
   firmaSolicitanteUrl String?
   firmaAprobadorUrl   String?
+  firmaPagoUrl        String? // firma de Cuentas por Pagar al entregar el dinero
+  fechaPago           DateTime?
   observacionesRechazo String?
 
   createdAt DateTime @default(now())

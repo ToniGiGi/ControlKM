@@ -560,6 +560,18 @@ export async function rejectFuelRequest(id: string, observacionesRechazo?: strin
   return req
 }
 
+// Último paso del flujo: Cuentas por Pagar firma al entregar el dinero.
+export async function payFuelRequest(id: string, firmaPagoUrl: string) {
+  const prisma = getPrisma()
+  const req = await prisma.fuelRequest.update({
+    where: { id },
+    data: { estado: 'PAGADA', firmaPagoUrl, fechaPago: new Date() }
+  })
+  revalidatePath('/combustible')
+  revalidatePath('/vehiculos')
+  return req
+}
+
 // --- Travel Requests (Viáticos) ---
 
 export async function getTravelRequests() {
@@ -601,6 +613,17 @@ export async function rejectTravelRequest(id: string, observacionesRechazo?: str
   const req = await prisma.travelRequest.update({
     where: { id },
     data: { estado: 'RECHAZADA', observacionesRechazo: observacionesRechazo || null }
+  })
+  revalidatePath('/viaticos')
+  return req
+}
+
+// Último paso del flujo: Cuentas por Pagar firma al entregar el dinero.
+export async function payTravelRequest(id: string, firmaPagoUrl: string) {
+  const prisma = getPrisma()
+  const req = await prisma.travelRequest.update({
+    where: { id },
+    data: { estado: 'PAGADA', firmaPagoUrl, fechaPago: new Date() }
   })
   revalidatePath('/viaticos')
   return req
@@ -1037,6 +1060,56 @@ export async function deleteInsuranceCompany(id: string) {
   revalidatePath('/organizacion')
   revalidatePath('/seguros')
   return i
+}
+
+// --- Usuarios y Roles ---
+// Solo Super Admin puede llegar a estas funciones (la página que las llama
+// oculta la sección completa con can('gestionar_usuarios')).
+
+const VALID_ROLES = ['SUPER_ADMIN', 'ADMINISTRADOR', 'CUENTAS_POR_PAGAR', 'CONDUCTOR']
+
+export async function getUsers() {
+  const prisma = getPrisma()
+  const users = await prisma.user.findMany({
+    orderBy: { createdAt: 'desc' },
+    select: {
+      id: true,
+      email: true,
+      role: true,
+      createdAt: true,
+      employee: { select: { nombre: true } },
+    }
+  })
+  return users
+}
+
+export async function createUser(data: { email: string, password: string, role: string }) {
+  const prisma = getPrisma()
+  const role = data.role?.toUpperCase()
+  if (!VALID_ROLES.includes(role)) throw new Error('Rol inválido')
+
+  const existing = await prisma.user.findUnique({ where: { email: data.email } })
+  if (existing) throw new Error('Ya existe una cuenta con ese correo electrónico.')
+
+  const user = await prisma.user.create({
+    data: {
+      email: data.email,
+      password: await hashPassword(data.password),
+      role,
+    }
+  })
+  revalidatePath('/organizacion')
+  return user
+}
+
+export async function updateUserRole(userId: string, role: string) {
+  const prisma = getPrisma()
+  const normalized = role?.toUpperCase()
+  if (!VALID_ROLES.includes(normalized)) throw new Error('Rol inválido')
+
+  const user = await prisma.user.update({ where: { id: userId }, data: { role: normalized } })
+  revalidatePath('/organizacion')
+  return user
 }
 
 

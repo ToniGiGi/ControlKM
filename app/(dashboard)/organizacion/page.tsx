@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { PageHeader } from '@/components/page-header'
-import { Building, MapPin, Plus, Trash2, Save, ShieldCheck, Camera, UploadCloud } from 'lucide-react'
+import { Building, MapPin, Plus, Trash2, Save, ShieldCheck, Camera, UploadCloud, Users, KeyRound } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -15,26 +16,48 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { 
-  getBranches, createBranch, deleteBranch, 
+import {
+  getBranches, createBranch, deleteBranch,
   getDepartments, createDepartment, deleteDepartment,
   getInsuranceCompanies, createInsuranceCompany, deleteInsuranceCompany,
-  getOrganizationConfig, updateOrganizationConfig
+  getOrganizationConfig, updateOrganizationConfig,
+  getUsers, createUser, updateUserRole,
 } from '@/app/actions/db'
+import { useRole } from '@/components/role-provider'
 import { toast } from 'sonner'
 import Image from 'next/image'
 
+const ROLE_OPTIONS = [
+  { value: 'SUPER_ADMIN', label: 'Super Admin' },
+  { value: 'ADMINISTRADOR', label: 'Administrador' },
+  { value: 'CUENTAS_POR_PAGAR', label: 'Cuentas por Pagar' },
+  { value: 'CONDUCTOR', label: 'Conductor' },
+]
+
+function roleLabel(role: string) {
+  return ROLE_OPTIONS.find(r => r.value === role)?.label || role
+}
+
 export default function OrganizacionPage() {
+  const { can } = useRole()
+  const canManageUsers = can('gestionar_usuarios')
+
   const [branches, setBranches] = useState<any[]>([])
   const [departments, setDepartments] = useState<any[]>([])
   const [insuranceCompanies, setInsuranceCompanies] = useState<any[]>([])
-  
+  const [users, setUsers] = useState<any[]>([])
+
   const [newBranch, setNewBranch] = useState('')
   const [newDepartment, setNewDepartment] = useState('')
   const [newInsuranceCompany, setNewInsuranceCompany] = useState('')
-  
+  const [newUserEmail, setNewUserEmail] = useState('')
+  const [newUserPassword, setNewUserPassword] = useState('')
+  const [newUserRole, setNewUserRole] = useState('CONDUCTOR')
+  const [isCreatingUser, setIsCreatingUser] = useState(false)
+  const [updatingUserId, setUpdatingUserId] = useState<string | null>(null)
+
   const [loading, setLoading] = useState(true)
-  
+
   const [branchToDelete, setBranchToDelete] = useState<any>(null)
   const [departmentToDelete, setDepartmentToDelete] = useState<any>(null)
   const [insuranceToDelete, setInsuranceToDelete] = useState<any>(null)
@@ -48,15 +71,17 @@ export default function OrganizacionPage() {
   const loadData = async () => {
     setLoading(true)
     try {
-      const [b, d, i, c] = await Promise.all([
-        getBranches(), 
-        getDepartments(), 
+      const [b, d, i, c, u] = await Promise.all([
+        getBranches(),
+        getDepartments(),
         getInsuranceCompanies(),
-        getOrganizationConfig()
+        getOrganizationConfig(),
+        canManageUsers ? getUsers() : Promise.resolve([]),
       ])
       setBranches(b)
       setDepartments(d)
       setInsuranceCompanies(i)
+      setUsers(u)
       if (c) {
         setOrgName(c.name)
         setOrgLogo(c.logoUrl)
@@ -187,6 +212,38 @@ export default function OrganizacionPage() {
     } catch (e: any) {
       toast.error('Error al eliminar: ' + e.message)
     }
+  }
+
+  // User handlers
+  const handleCreateUser = async () => {
+    if (!newUserEmail.trim() || !newUserPassword.trim()) {
+      toast.error('Captura el correo y la contraseña del nuevo usuario.')
+      return
+    }
+    setIsCreatingUser(true)
+    try {
+      await createUser({ email: newUserEmail.trim(), password: newUserPassword, role: newUserRole })
+      setNewUserEmail('')
+      setNewUserPassword('')
+      setNewUserRole('CONDUCTOR')
+      toast.success('Usuario creado correctamente')
+      loadData()
+    } catch (e: any) {
+      toast.error(e.message || 'Error al crear el usuario')
+    }
+    setIsCreatingUser(false)
+  }
+
+  const handleChangeUserRole = async (userId: string, role: string) => {
+    setUpdatingUserId(userId)
+    try {
+      await updateUserRole(userId, role)
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, role } : u))
+      toast.success('Rol actualizado')
+    } catch (e: any) {
+      toast.error(e.message || 'Error al actualizar el rol')
+    }
+    setUpdatingUserId(null)
   }
 
   return (
@@ -443,6 +500,96 @@ export default function OrganizacionPage() {
           </div>
         </div>
       </div>
+
+      {/* Usuarios y Roles (solo Super Admin) */}
+      {canManageUsers && (
+        <div className="rounded-xl border bg-card text-card-foreground shadow-sm flex flex-col">
+          <div className="p-6 border-b bg-muted/30 flex items-center gap-3">
+            <div className="p-2 bg-primary/10 rounded-lg">
+              <Users className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-lg tracking-tight">Usuarios y Roles</h3>
+              <p className="text-sm text-muted-foreground">Da de alta cuentas y asigna el rol de cada quien: Super Admin, Administrador, Cuentas por Pagar o Conductor.</p>
+            </div>
+          </div>
+
+          <div className="p-6 bg-muted/10 border-b">
+            <label className="text-sm font-medium mb-2 block flex items-center gap-1.5"><KeyRound className="size-4" /> Crear nuevo usuario</label>
+            <div className="flex flex-col md:flex-row gap-3">
+              <Input
+                type="email"
+                placeholder="correo@empresa.com"
+                value={newUserEmail}
+                onChange={e => setNewUserEmail(e.target.value)}
+                className="flex-1 bg-background"
+              />
+              <Input
+                type="password"
+                placeholder="Contraseña"
+                value={newUserPassword}
+                onChange={e => setNewUserPassword(e.target.value)}
+                className="md:w-48 bg-background"
+              />
+              <Select value={newUserRole} onValueChange={(v) => setNewUserRole(v || 'CONDUCTOR')}>
+                <SelectTrigger className="md:w-52 bg-background">
+                  <SelectValue placeholder="Rol" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ROLE_OPTIONS.map(r => (
+                    <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button onClick={handleCreateUser} disabled={isCreatingUser} className="gap-2 shrink-0">
+                <Plus className="w-4 h-4"/> {isCreatingUser ? 'Creando...' : 'Crear Usuario'}
+              </Button>
+            </div>
+          </div>
+
+          <div className="p-6">
+            <h4 className="text-sm font-medium text-muted-foreground mb-4 uppercase tracking-wider">Cuentas registradas</h4>
+            <div className="border rounded-lg bg-background overflow-hidden">
+              {loading ? (
+                <div className="p-8 text-center text-sm text-muted-foreground flex justify-center items-center gap-2">
+                  <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                  Cargando...
+                </div>
+              ) : users.length === 0 ? (
+                <div className="p-12 text-center text-sm text-muted-foreground flex flex-col items-center gap-2">
+                  <Users className="w-8 h-8 text-muted-foreground/30" />
+                  <p>No hay usuarios registrados aún.</p>
+                </div>
+              ) : (
+                <ul className="divide-y">
+                  {users.map(u => (
+                    <li key={u.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <p className="font-medium">{u.employee?.nombre || u.email}</p>
+                        <p className="text-xs text-muted-foreground">{u.email}</p>
+                      </div>
+                      <Select
+                        value={u.role}
+                        onValueChange={(v) => v && handleChangeUserRole(u.id, v)}
+                        disabled={updatingUserId === u.id}
+                      >
+                        <SelectTrigger className="w-full sm:w-52">
+                          <SelectValue>{roleLabel(u.role)}</SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {ROLE_OPTIONS.map(r => (
+                            <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Delete Confirmation Modals */}
       <AlertDialog open={isLogoConfirmOpen} onOpenChange={setIsLogoConfirmOpen}>

@@ -21,7 +21,7 @@ import {
 import { FuelPdfDocument } from './fuel-pdf-document'
 import { SignatureModal } from '@/components/shared/signature-modal'
 import { RejectModal } from '@/components/shared/reject-modal'
-import { approveFuelRequest, rejectFuelRequest, deleteFuelRequest } from '@/app/actions/db'
+import { approveFuelRequest, rejectFuelRequest, payFuelRequest, deleteFuelRequest } from '@/app/actions/db'
 import { useRole } from '@/components/role-provider'
 import { ListPagination } from '@/components/ui/list-pagination'
 
@@ -32,7 +32,7 @@ type FuelRequestListProps = {
   vehicles: any[]
 }
 export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListProps) {
-  const { role, config } = useRole()
+  const { role, config, can } = useRole()
   const isConductor = role === 'conductor'
 
   const [requests, setRequests] = useState(initialRequests)
@@ -44,6 +44,7 @@ export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListPr
   const [pdfData, setPdfData] = useState<any | null>(null)
   const [approvingId, setApprovingId] = useState<string | null>(null)
   const [rejectingId, setRejectingId] = useState<string | null>(null)
+  const [payingId, setPayingId] = useState<string | null>(null)
 
   const handleApprove = (id: string) => {
     setApprovingId(id)
@@ -70,6 +71,22 @@ export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListPr
     await rejectFuelRequest(rejectingId, observaciones)
     setRequests(prev => prev.map(r => r.id === rejectingId ? { ...r, estado: 'RECHAZADA', observacionesRechazo: observaciones } : r))
     setRejectingId(null)
+  }
+
+  const handlePay = (id: string) => {
+    setPayingId(id)
+  }
+
+  const handleConfirmPaySignature = async (firmaPagoUrl: string) => {
+    if (!payingId) return
+    try {
+      await payFuelRequest(payingId, firmaPagoUrl)
+      setRequests(prev => prev.map(r => r.id === payingId ? { ...r, estado: 'PAGADA', firmaPagoUrl } : r))
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setPayingId(null)
+    }
   }
 
   const handleDelete = async (id: string) => {
@@ -150,6 +167,15 @@ export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListPr
         onConfirm={handleConfirmReject}
       />
 
+      <SignatureModal
+        open={!!payingId}
+        onOpenChange={(open) => { if (!open) setPayingId(null) }}
+        title="Firma de Cuentas por Pagar"
+        description="Firma para confirmar que el dinero de esta solicitud ya fue entregado."
+        confirmLabel="Confirmar Pago y Firmar"
+        onConfirm={handleConfirmPaySignature}
+      />
+
       <PageHeader
         title="Solicitudes de Combustible"
         description={`${filtered.length} viáticos gestionados`}
@@ -179,7 +205,8 @@ export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListPr
           <SelectContent>
             <SelectItem value="todos">Todos</SelectItem>
             <SelectItem value="pendiente">Pendientes</SelectItem>
-            <SelectItem value="aprobada">Aprobadas</SelectItem>
+            <SelectItem value="aprobada">Con visto bueno</SelectItem>
+            <SelectItem value="pagada">Pagadas</SelectItem>
             <SelectItem value="rechazada">Rechazadas</SelectItem>
           </SelectContent>
         </Select>
@@ -219,11 +246,14 @@ export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListPr
           {paginated.map((r) => {
             const isPending = r.estado === 'PENDIENTE'
             const isApproved = r.estado === 'APROBADA'
-            const badgeClass = isApproved 
-              ? 'border-emerald-500/50 text-emerald-600 bg-emerald-500/10' 
-              : isPending 
-                ? 'border-amber-500/50 text-amber-600 bg-amber-500/10'
-                : 'border-red-500/50 text-red-600 bg-red-500/10'
+            const isPaid = r.estado === 'PAGADA'
+            const badgeClass = isPaid
+              ? 'border-emerald-500/50 text-emerald-600 bg-emerald-500/10'
+              : isApproved
+                ? 'border-blue-500/50 text-blue-600 bg-blue-500/10'
+                : isPending
+                  ? 'border-amber-500/50 text-amber-600 bg-amber-500/10'
+                  : 'border-red-500/50 text-red-600 bg-red-500/10'
 
             return (
               <Card key={r.id} className="flex flex-col relative overflow-hidden transition-all hover:shadow-md border-t-4 border-t-primary/10">
@@ -303,7 +333,7 @@ export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListPr
                       </Button>
                     </div>
                     
-                    {r.estado === 'PENDIENTE' && !isConductor && (
+                    {r.estado === 'PENDIENTE' && can('aprobar_solicitudes') && (
                       <div className="flex gap-2 w-full sm:w-auto">
                         <Button
                           variant="outline"
@@ -320,11 +350,21 @@ export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListPr
                           className="flex-1 sm:flex-none bg-emerald-600 hover:bg-emerald-700 text-white"
                         >
                           <CheckCircle className="size-4 mr-1" />
-                          Aprobar
+                          Dar Visto Bueno
                         </Button>
                       </div>
                     )}
-                    {(!isConductor || r.estado === 'PENDIENTE') && (
+                    {r.estado === 'APROBADA' && can('pagar_solicitudes') && (
+                      <Button
+                        size="sm"
+                        onClick={() => handlePay(r.id)}
+                        className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-700 text-white"
+                      >
+                        <Banknote className="size-4 mr-1" />
+                        Pagar y Firmar
+                      </Button>
+                    )}
+                    {(can('eliminar') || (isConductor && r.estado === 'PENDIENTE')) && (
                       <Button
                         variant="ghost"
                         size="icon"
@@ -362,11 +402,14 @@ export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListPr
                 {paginated.map((r) => {
                   const isApproved = r.estado === 'APROBADA'
                   const isPending = r.estado === 'PENDIENTE'
-                  const badgeClass = isApproved
+                  const isPaid = r.estado === 'PAGADA'
+                  const badgeClass = isPaid
                     ? 'border-emerald-500/50 text-emerald-600 bg-emerald-500/10'
-                    : isPending
-                      ? 'border-amber-500/50 text-amber-600 bg-amber-500/10'
-                      : 'border-red-500/50 text-red-600 bg-red-500/10'
+                    : isApproved
+                      ? 'border-blue-500/50 text-blue-600 bg-blue-500/10'
+                      : isPending
+                        ? 'border-amber-500/50 text-amber-600 bg-amber-500/10'
+                        : 'border-red-500/50 text-red-600 bg-red-500/10'
 
                   return (
                     <TableRow key={r.id}>
@@ -420,17 +463,22 @@ export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListPr
                           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setPdfData(r)} title="Generar PDF">
                             <FileDown className="size-4 text-muted-foreground" />
                           </Button>
-                          {r.estado === 'PENDIENTE' && !isConductor && (
+                          {r.estado === 'PENDIENTE' && can('aprobar_solicitudes') && (
                             <>
                               <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-600" onClick={() => handleReject(r.id)} title="Rechazar">
                                 <XCircle className="size-4" />
                               </Button>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-emerald-600 hover:text-emerald-700" onClick={() => handleApprove(r.id)} title="Aprobar">
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-emerald-600 hover:text-emerald-700" onClick={() => handleApprove(r.id)} title="Dar Visto Bueno">
                                 <CheckCircle className="size-4" />
                               </Button>
                             </>
                           )}
-                          {(!isConductor || r.estado === 'PENDIENTE') && (
+                          {r.estado === 'APROBADA' && can('pagar_solicitudes') && (
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:text-blue-700" onClick={() => handlePay(r.id)} title="Pagar y Firmar">
+                              <Banknote className="size-4" />
+                            </Button>
+                          )}
+                          {(can('eliminar') || (isConductor && r.estado === 'PENDIENTE')) && (
                             <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500/70 hover:text-red-600" onClick={() => handleDelete(r.id)} title="Eliminar">
                               <Trash2 className="size-4" />
                             </Button>

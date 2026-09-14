@@ -209,7 +209,7 @@ export function Topbar({ onMenu, onToggleCollapse, isCollapsed }: { onMenu: () =
                 <div className="flex flex-col space-y-1">
                   <p className="text-sm font-medium leading-none">{config.nombre}</p>
                   <p className="text-xs leading-none text-muted-foreground">
-                    {config.role}
+                    {config.label}
                   </p>
                 </div>
               </DropdownMenuLabel>

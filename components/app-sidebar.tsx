@@ -62,6 +62,13 @@ const operacionConductor: NavItem[] = [
   { label: 'Mis Gastos', href: '/gastos', icon: Receipt, disabled: false },
 ]
 
+// Cuentas por Pagar: solo necesita ver vehículos (en Principal) y las
+// solicitudes que tiene que pagar, sin acceso a Empleados/Seguros/etc.
+const operacionCuentasPorPagar: NavItem[] = [
+  { label: 'Combustible', href: '/combustible', icon: Fuel, disabled: false },
+  { label: 'Viáticos', href: '/viaticos', icon: Wallet, disabled: false },
+]
+
 import Image from 'next/image'
 
 const configuracionAdmin: NavItem[] = [
@@ -149,6 +156,7 @@ export function AppSidebar({ isCollapsed }: { isCollapsed?: boolean }) {
   const { role } = useRole()
   const isConductor = role === 'conductor'
   const isSuperAdmin = role === 'super_admin'
+  const isCuentasPorPagar = role === 'cuentas_por_pagar'
   
   const { sidebarColor } = useTheme()
   const [isMounted, setIsMounted] = useState(false)
@@ -180,12 +188,13 @@ export function AppSidebar({ isCollapsed }: { isCollapsed?: boolean }) {
       <nav className="flex-1 overflow-y-auto pb-4 space-y-2 mt-6 custom-scrollbar">
         <NavGroup title="Principal" items={principal} isCollapsed={isCollapsed} pendingHref={pendingHref} onNavigate={handleNavigate} />
         {!isSuperAdmin && <NavGroup title="Cuenta" items={cuenta} isCollapsed={isCollapsed} pendingHref={pendingHref} onNavigate={handleNavigate} />}
-        {!isConductor && <NavGroup title="Personas" items={personas} isCollapsed={isCollapsed} pendingHref={pendingHref} onNavigate={handleNavigate} />}
-        {!isConductor && <NavGroup title="Operación" items={operacion} isCollapsed={isCollapsed} pendingHref={pendingHref} onNavigate={handleNavigate} />}
+        {!isConductor && !isCuentasPorPagar && <NavGroup title="Personas" items={personas} isCollapsed={isCollapsed} pendingHref={pendingHref} onNavigate={handleNavigate} />}
+        {!isConductor && !isCuentasPorPagar && <NavGroup title="Operación" items={operacion} isCollapsed={isCollapsed} pendingHref={pendingHref} onNavigate={handleNavigate} />}
         {isConductor && <NavGroup title="Operación" items={operacionConductor} isCollapsed={isCollapsed} pendingHref={pendingHref} onNavigate={handleNavigate} />}
-        
-        {!isConductor && <NavGroup title="Configuración" items={configuracionAdmin} isCollapsed={isCollapsed} pendingHref={pendingHref} onNavigate={handleNavigate} />}
-        {isConductor && <NavGroup title="Configuración" items={configuracionConductor} isCollapsed={isCollapsed} pendingHref={pendingHref} onNavigate={handleNavigate} />}
+        {isCuentasPorPagar && <NavGroup title="Operación" items={operacionCuentasPorPagar} isCollapsed={isCollapsed} pendingHref={pendingHref} onNavigate={handleNavigate} />}
+
+        {!isConductor && !isCuentasPorPagar && <NavGroup title="Configuración" items={configuracionAdmin} isCollapsed={isCollapsed} pendingHref={pendingHref} onNavigate={handleNavigate} />}
+        {(isConductor || isCuentasPorPagar) && <NavGroup title="Configuración" items={configuracionConductor} isCollapsed={isCollapsed} pendingHref={pendingHref} onNavigate={handleNavigate} />}
         {isConductor && (
           <div className={cn(
             "mx-4 mt-6 rounded-lg border border-sidebar-border bg-sidebar-accent/40 p-3 text-xs text-sidebar-foreground/70 overflow-hidden transition-all duration-300",

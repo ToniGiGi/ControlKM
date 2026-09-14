@@ -219,7 +219,7 @@ export function TravelPdfDocument({ data, onClose }: TravelPdfDocumentProps) {
         </table>
 
         {/* SECCIÓN DE FIRMAS */}
-        <div className="mt-16 grid grid-cols-2 gap-16 text-center px-12">
+        <div className="mt-16 grid grid-cols-3 gap-8 text-center px-8">
           <div>
             <div className="h-14 flex items-end justify-center">
               {data.firmaSolicitanteUrl && (
@@ -239,6 +239,16 @@ export function TravelPdfDocument({ data, onClose }: TravelPdfDocumentProps) {
             <div className="border-b border-black mb-2 mx-4"></div>
             <p className="font-bold text-xs">Autoriza</p>
             <p className="text-[10px]">Administrador General</p>
+          </div>
+          <div>
+            <div className="h-14 flex items-end justify-center">
+              {data.firmaPagoUrl && (
+                <img src={data.firmaPagoUrl} alt="Firma de Cuentas por Pagar" className="max-h-14 object-contain" />
+              )}
+            </div>
+            <div className="border-b border-black mb-2 mx-4"></div>
+            <p className="font-bold text-xs">Pagó</p>
+            <p className="text-[10px]">Cuentas por Pagar</p>
           </div>
         </div>
 

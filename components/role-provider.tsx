@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, type ReactNode } from 'react'
 import { useSession } from 'next-auth/react'
 
-export type Role = 'super_admin' | 'administrador' | 'conductor'
+export type Role = 'super_admin' | 'administrador' | 'cuentas_por_pagar' | 'conductor'
 
 interface RoleConfig {
   role: Role
@@ -27,10 +27,16 @@ export type Permission =
   | 'eliminar'
   | 'configuracion'
   | 'gestionar_usuarios'
+  | 'aprobar_solicitudes'
+  | 'pagar_solicitudes'
 
+// Flujo de solicitudes (Combustible/Viáticos): el empleado la sube, un
+// administrador da el visto bueno (aprobar_solicitudes) y Cuentas por Pagar
+// firma al final al entregar el dinero (pagar_solicitudes).
 const permissionsByRole: Record<Role, Permission[]> = {
-  super_admin: ['ver_toda_flotilla', 'crear_editar', 'eliminar', 'configuracion', 'gestionar_usuarios'],
-  administrador: ['ver_toda_flotilla', 'crear_editar'],
+  super_admin: ['ver_toda_flotilla', 'crear_editar', 'eliminar', 'configuracion', 'gestionar_usuarios', 'aprobar_solicitudes', 'pagar_solicitudes'],
+  administrador: ['ver_toda_flotilla', 'crear_editar', 'eliminar', 'configuracion', 'aprobar_solicitudes', 'pagar_solicitudes'],
+  cuentas_por_pagar: ['ver_toda_flotilla', 'pagar_solicitudes'],
   conductor: ['crear_editar'],
 }
 
@@ -56,9 +62,16 @@ export function RoleProvider({ children }: { children: ReactNode }) {
   const image = session?.user?.image || undefined
   
   const empleadoId = (session?.user as any)?.employeeId || ''
+  const roleLabels: Record<Role, string> = {
+    super_admin: 'Super Admin',
+    administrador: 'Administrador',
+    cuentas_por_pagar: 'Cuentas por Pagar',
+    conductor: 'Conductor',
+  }
+
   const config: RoleConfig = {
     role,
-    label: role === 'super_admin' ? 'Super Admin' : role === 'administrador' ? 'Administrador' : 'Conductor',
+    label: roleLabels[role],
     descripcion: '',
     empleadoId, 
     nombre: name,
