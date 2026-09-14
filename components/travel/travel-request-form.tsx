@@ -160,9 +160,10 @@ function TransportItem({
 
 type TravelRequestFormProps = {
   fuelRequests: any[]
+  defaultPuesto?: string
 }
 
-export function TravelRequestForm({ fuelRequests }: TravelRequestFormProps) {
+export function TravelRequestForm({ fuelRequests, defaultPuesto }: TravelRequestFormProps) {
   const router = useRouter()
   const { role, config } = useRole()
 
@@ -172,7 +173,7 @@ export function TravelRequestForm({ fuelRequests }: TravelRequestFormProps) {
 
   // Datos Generales
   const [solicitanteNombre, setSolicitanteNombre] = useState(role === 'conductor' ? config.nombre : '')
-  const [puesto, setPuesto] = useState('')
+  const [puesto, setPuesto] = useState(defaultPuesto || '')
   const [fecha, setFecha] = useState(toDateInputValue(new Date()))
   const [asociadoPedido, setAsociadoPedido] = useState(false)
   const [folioPedido, setFolioPedido] = useState('')

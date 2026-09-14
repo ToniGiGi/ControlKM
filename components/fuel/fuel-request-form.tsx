@@ -22,9 +22,10 @@ const GAS_PRICES = {
 type FuelRequestFormProps = {
   vehicles: any[]
   departments: any[]
+  defaultDepartamentoId?: string
 }
 
-export function FuelRequestForm({ vehicles, departments }: FuelRequestFormProps) {
+export function FuelRequestForm({ vehicles, departments, defaultDepartamentoId }: FuelRequestFormProps) {
   const router = useRouter()
   const { role, config } = useRole()
 
@@ -34,7 +35,7 @@ export function FuelRequestForm({ vehicles, departments }: FuelRequestFormProps)
 
   // Datos Generales
   const [solicitanteNombre, setSolicitanteNombre] = useState(role === 'conductor' ? config.nombre : '')
-  const [departamentoId, setDepartamentoId] = useState('')
+  const [departamentoId, setDepartamentoId] = useState(defaultDepartamentoId || '')
   const [area, setArea] = useState('')
   const [vehiculoId, setVehiculoId] = useState(selectableVehicles.length === 1 ? selectableVehicles[0].id : '')
   const [motivo, setMotivo] = useState('')
@@ -105,6 +106,7 @@ export function FuelRequestForm({ vehicles, departments }: FuelRequestFormProps)
   const [mapMarkers, setMapMarkers] = useState<{lat: number, lng: number, title: string, role?: 'origen' | 'destino'}[]>([])
   const [isCalculatingRoute, setIsCalculatingRoute] = useState(false)
   const [activeLegIndex, setActiveLegIndex] = useState<number | null>(null)
+  const [mapFitKey, setMapFitKey] = useState(0)
   
   // Extras
   const [numCasetas, setNumCasetas] = useState<number | ''>('')
@@ -198,6 +200,7 @@ export function FuelRequestForm({ vehicles, departments }: FuelRequestFormProps)
           { lat: destCoord.lat, lng: destCoord.lon, title: `Destino: ${leg.destino}`, role: 'destino' }
         ]);
         setActiveLegIndex(index);
+        setMapFitKey(k => k + 1);
       } else {
         alert("No se pudo trazar una ruta en carretera entre estos puntos.");
       }
@@ -484,7 +487,7 @@ export function FuelRequestForm({ vehicles, departments }: FuelRequestFormProps)
             
             {/* Mapa Preview */}
             <div className="w-full pt-4 space-y-2">
-              <RouteMap routeCoordinates={mapCoordinates} markers={mapMarkers} onMarkerDragEnd={handleMarkerDragEnd} />
+              <RouteMap routeCoordinates={mapCoordinates} markers={mapMarkers} onMarkerDragEnd={handleMarkerDragEnd} fitKey={mapFitKey} />
               {mapMarkers.length > 0 && (
                 <p className="text-xs text-muted-foreground flex items-center gap-1.5">
                   <Navigation className="size-3.5" />

@@ -14,10 +14,12 @@ export function RouteMap({
   routeCoordinates,
   markers,
   onMarkerDragEnd,
+  fitKey,
 }: {
   routeCoordinates: [number, number][];
   markers: Marker[];
   onMarkerDragEnd?: (role: 'origen' | 'destino', lat: number, lng: number) => void;
+  fitKey?: number;
 }) {
-  return <MapComponent routeCoordinates={routeCoordinates} markers={markers} onMarkerDragEnd={onMarkerDragEnd} />;
+  return <MapComponent routeCoordinates={routeCoordinates} markers={markers} onMarkerDragEnd={onMarkerDragEnd} fitKey={fitKey} />;
 }

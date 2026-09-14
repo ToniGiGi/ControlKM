@@ -1,4 +1,6 @@
+import { auth } from '@/auth'
 import { getVehicles, getDepartments } from '@/app/actions/db'
+import { getProfile } from '@/app/actions/profile'
 import { FuelRequestForm } from '@/components/fuel/fuel-request-form'
 import { PageHeader } from '@/components/page-header'
 import { Button } from '@/components/ui/button'
@@ -6,10 +8,14 @@ import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 
 export default async function NuevaSolicitudCombustiblePage() {
-  const [vehicles, departments] = await Promise.all([
+  const session = await auth()
+  const [vehicles, departments, profile] = await Promise.all([
     getVehicles(),
     getDepartments(),
+    session?.user?.email ? getProfile(session.user.email) : Promise.resolve(null),
   ])
+
+  const defaultDepartamentoId = profile?.employee?.departamentoId || ''
 
   return (
     <div className="flex-1 space-y-6 p-4 md:p-8 pt-6 max-w-screen-xl mx-auto w-full">
@@ -25,7 +31,7 @@ export default async function NuevaSolicitudCombustiblePage() {
         />
       </div>
 
-      <FuelRequestForm vehicles={vehicles} departments={departments} />
+      <FuelRequestForm vehicles={vehicles} departments={departments} defaultDepartamentoId={defaultDepartamentoId} />
     </div>
   )
 }

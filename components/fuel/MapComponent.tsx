@@ -31,20 +31,25 @@ interface MapComponentProps {
   routeCoordinates: [number, number][]; // Array of [lat, lng]
   markers: { lat: number; lng: number; title: string; role?: 'origen' | 'destino' }[];
   onMarkerDragEnd?: (role: 'origen' | 'destino', lat: number, lng: number) => void;
+  // Se incrementa solo cuando se debe reencuadrar el mapa (ej. al calcular una
+  // ruta nueva), NO en cada arrastre de marcador - así el zoom/posición que el
+  // usuario ajustó manualmente no se pierde al mover un pin.
+  fitKey?: number;
 }
 
-// Componente para ajustar el zoom y centro automáticamente
-function ChangeView({ bounds }: { bounds: L.LatLngBoundsExpression }) {
+// Componente para ajustar el zoom y centro automáticamente, solo cuando fitKey cambia
+function ChangeView({ bounds, fitKey }: { bounds: L.LatLngBoundsExpression; fitKey?: number }) {
   const map = useMap();
   useEffect(() => {
     if (bounds) {
       map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
     }
-  }, [bounds, map]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fitKey]);
   return null;
 }
 
-export default function MapComponent({ routeCoordinates, markers, onMarkerDragEnd }: MapComponentProps) {
+export default function MapComponent({ routeCoordinates, markers, onMarkerDragEnd, fitKey }: MapComponentProps) {
   // Centro por defecto: México
   const defaultCenter: [number, number] = [23.6345, -102.5528];
 
@@ -62,7 +67,7 @@ export default function MapComponent({ routeCoordinates, markers, onMarkerDragEn
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        {bounds && <ChangeView bounds={bounds} />}
+        {bounds && <ChangeView bounds={bounds} fitKey={fitKey} />}
         
         {routeCoordinates.length > 0 && (
           <Polyline positions={routeCoordinates} color="#3b82f6" weight={6} opacity={0.8} />
