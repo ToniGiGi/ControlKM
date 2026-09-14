@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { updateProfile } from '@/app/actions/profile'
 import { uploadImage } from '@/app/actions/upload'
 import { toast } from 'sonner'
-import { UploadCloud, Save, CheckCircle2, User, Mail, Phone, KeyRound, FileText, Loader2, Building, MapPin, Eye, Calendar } from 'lucide-react'
+import { UploadCloud, Save, CheckCircle2, User, Mail, Phone, KeyRound, FileText, Loader2, Building, MapPin, Eye, EyeOff, Calendar, Lock, Check, X } from 'lucide-react'
 
 function toDateInputValue(value: any) {
   if (!value) return ''
@@ -48,6 +48,46 @@ function getLicenseExpiration(vencimiento: string) {
   return { diffDays, percentage, status, progressColor, badgeColor }
 }
 
+function PasswordField({
+  id, label, value, onChange, show, onToggleShow, placeholder, autoComplete,
+}: {
+  id: string
+  label: string
+  value: string
+  onChange: (v: string) => void
+  show: boolean
+  onToggleShow: () => void
+  placeholder?: string
+  autoComplete?: string
+}) {
+  return (
+    <div className="grid gap-2">
+      <Label htmlFor={id}>{label}</Label>
+      <div className="relative">
+        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-400 pointer-events-none" />
+        <Input
+          id={id}
+          type={show ? 'text' : 'password'}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          autoComplete={autoComplete}
+          className="focus-visible:ring-blue-500 h-11 pl-9 pr-10"
+        />
+        <button
+          type="button"
+          onClick={onToggleShow}
+          tabIndex={-1}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+          aria-label={show ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+        >
+          {show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export function ProfileForm({ user }: { user: any }) {
   const [savingPersonal, setSavingPersonal] = useState(false)
   const [savingSecurity, setSavingSecurity] = useState(false)
@@ -61,6 +101,10 @@ export function ProfileForm({ user }: { user: any }) {
   const [telefono, setTelefono] = useState(employee.telefono || '')
   const [currentPassword, setCurrentPassword] = useState('')
   const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [licencia, setLicencia] = useState(employee.licencia || '')
   const [licenciaUrl, setLicenciaUrl] = useState(employee.licenciaUrl || '')
   const [vigenciaInicio, setVigenciaInicio] = useState(toDateInputValue(employee.licenciaVigenciaInicio))
@@ -116,8 +160,16 @@ export function ProfileForm({ user }: { user: any }) {
   }
 
   const handleSaveSecurity = async () => {
-    if (!password.trim()) {
-      toast.error('Ingresa una nueva contraseña.')
+    if (!currentPassword.trim()) {
+      toast.error('Ingresa tu contraseña actual.')
+      return
+    }
+    if (password.length < 6) {
+      toast.error('La nueva contraseña debe tener al menos 6 caracteres.')
+      return
+    }
+    if (password !== confirmPassword) {
+      toast.error('Las contraseñas no coinciden.')
       return
     }
     setSavingSecurity(true)
@@ -125,6 +177,7 @@ export function ProfileForm({ user }: { user: any }) {
       await updateProfile(user.id, { password, currentPassword })
       toast.success('Contraseña actualizada correctamente')
       setPassword('')
+      setConfirmPassword('')
       setCurrentPassword('')
     } catch (error: any) {
       toast.error(error?.message || 'No se pudo actualizar la contraseña.')
@@ -306,29 +359,61 @@ export function ProfileForm({ user }: { user: any }) {
                 <CardDescription>Cambia tu contraseña de acceso si lo requieres.</CardDescription>
               </div>
             </CardHeader>
-            <CardContent className="pt-6 grid gap-6">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-2xl">
-                <div className="grid gap-2">
-                  <Label htmlFor="currentPassword">Contraseña Actual</Label>
-                  <Input
-                    id="currentPassword"
-                    type="password"
-                    value={currentPassword}
-                    onChange={(e) => setCurrentPassword(e.target.value)}
-                    placeholder="Requerida para cambiar la contraseña"
-                    className="focus-visible:ring-blue-500 h-11"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="password">Nueva Contraseña</Label>
-                  <Input
+            <CardContent className="pt-6 grid gap-5">
+              <div className="grid gap-5 max-w-md">
+                <PasswordField
+                  id="currentPassword"
+                  label="Contraseña Actual"
+                  value={currentPassword}
+                  onChange={setCurrentPassword}
+                  show={showCurrentPassword}
+                  onToggleShow={() => setShowCurrentPassword((v) => !v)}
+                  placeholder="Tu contraseña actual"
+                  autoComplete="current-password"
+                />
+
+                <div className="border-t pt-5 grid gap-5">
+                  <PasswordField
                     id="password"
-                    type="password"
+                    label="Nueva Contraseña"
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Dejar en blanco para no cambiar"
-                    className="focus-visible:ring-blue-500 h-11"
+                    onChange={setPassword}
+                    show={showPassword}
+                    onToggleShow={() => setShowPassword((v) => !v)}
+                    placeholder="Mínimo 6 caracteres"
+                    autoComplete="new-password"
                   />
+
+                  {password && (
+                    <div className="flex items-center gap-1.5 -mt-3 text-xs">
+                      {password.length >= 6 ? (
+                        <span className="flex items-center gap-1 text-emerald-600"><Check className="size-3.5" /> Longitud válida</span>
+                      ) : (
+                        <span className="flex items-center gap-1 text-slate-400"><X className="size-3.5" /> Mínimo 6 caracteres</span>
+                      )}
+                    </div>
+                  )}
+
+                  <PasswordField
+                    id="confirmPassword"
+                    label="Confirmar Nueva Contraseña"
+                    value={confirmPassword}
+                    onChange={setConfirmPassword}
+                    show={showConfirmPassword}
+                    onToggleShow={() => setShowConfirmPassword((v) => !v)}
+                    placeholder="Repite la nueva contraseña"
+                    autoComplete="new-password"
+                  />
+
+                  {confirmPassword && (
+                    <div className="flex items-center gap-1.5 -mt-3 text-xs">
+                      {password === confirmPassword ? (
+                        <span className="flex items-center gap-1 text-emerald-600"><Check className="size-3.5" /> Las contraseñas coinciden</span>
+                      ) : (
+                        <span className="flex items-center gap-1 text-red-500"><X className="size-3.5" /> Las contraseñas no coinciden</span>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="flex justify-end">
