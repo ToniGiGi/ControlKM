@@ -35,7 +35,7 @@ export type Permission =
 // firma al final al entregar el dinero (pagar_solicitudes).
 const permissionsByRole: Record<Role, Permission[]> = {
   super_admin: ['ver_toda_flotilla', 'crear_editar', 'eliminar', 'configuracion', 'gestionar_usuarios', 'aprobar_solicitudes', 'pagar_solicitudes'],
-  administrador: ['ver_toda_flotilla', 'crear_editar', 'eliminar', 'configuracion', 'aprobar_solicitudes', 'pagar_solicitudes'],
+  administrador: ['ver_toda_flotilla', 'crear_editar', 'eliminar', 'configuracion', 'aprobar_solicitudes'],
   cuentas_por_pagar: ['ver_toda_flotilla', 'pagar_solicitudes'],
   conductor: ['crear_editar'],
 }
