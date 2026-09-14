@@ -1,6 +1,6 @@
 'use client'
 
-import { Bell, Menu, Search, PanelLeftClose, PanelLeft, X } from 'lucide-react'
+import { Bell, Menu, Search, PanelLeftClose, PanelLeft, X, Volume2, VolumeX } from 'lucide-react'
 import { usePathname, useRouter } from 'next/navigation'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -19,8 +19,38 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useRole } from '@/components/role-provider'
 import { signOut } from 'next-auth/react'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { getAlerts } from '@/app/actions/db'
+
+function playNotificationSound() {
+  try {
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext
+    if (!AudioCtx) return
+    const ctx = new AudioCtx()
+    const now = ctx.currentTime
+
+    const playTone = (freq: number, start: number, duration: number) => {
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.type = 'sine'
+      osc.frequency.value = freq
+      gain.gain.setValueAtTime(0, now + start)
+      gain.gain.linearRampToValueAtTime(0.2, now + start + 0.02)
+      gain.gain.exponentialRampToValueAtTime(0.001, now + start + duration)
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      osc.start(now + start)
+      osc.stop(now + start + duration)
+    }
+
+    playTone(880, 0, 0.15)
+    playTone(1318.5, 0.12, 0.2)
+
+    setTimeout(() => ctx.close().catch(() => {}), 500)
+  } catch (e) {
+    // silencioso: audio no disponible en este navegador/contexto
+  }
+}
 
 function initials(name: string) {
   return name
@@ -49,6 +79,8 @@ export function Topbar({ onMenu, onToggleCollapse, isCollapsed }: { onMenu: () =
   const pathname = usePathname()
   const [dynamicAlerts, setDynamicAlerts] = useState<any[]>([])
   const [dismissedAlerts, setDismissedAlerts] = useState<string[]>([])
+  const [soundEnabled, setSoundEnabled] = useState(true)
+  const knownAlertIdsRef = useRef<Set<string> | null>(null)
 
   useEffect(() => {
     const saved = localStorage.getItem('dismissedAlerts')
@@ -57,16 +89,39 @@ export function Topbar({ onMenu, onToggleCollapse, isCollapsed }: { onMenu: () =
         setDismissedAlerts(JSON.parse(saved))
       } catch (e) {}
     }
+    const savedSound = localStorage.getItem('notifSoundEnabled')
+    if (savedSound !== null) setSoundEnabled(savedSound === 'true')
   }, [])
+
+  const toggleSound = () => {
+    const next = !soundEnabled
+    setSoundEnabled(next)
+    localStorage.setItem('notifSoundEnabled', String(next))
+  }
+
+  useEffect(() => {
+    // Al cambiar de rol/usuario, reinicia el set de alertas conocidas para no
+    // sonar con alertas que ya existían al momento de cargar.
+    knownAlertIdsRef.current = null
+  }, [role, config.empleadoId])
 
   useEffect(() => {
     const fetchAlerts = () => {
-      getAlerts(role === 'conductor' ? config.empleadoId : undefined, role).then(setDynamicAlerts).catch(console.error)
+      getAlerts(role === 'conductor' ? config.empleadoId : undefined, role).then((alerts) => {
+        const isFirstLoad = knownAlertIdsRef.current === null
+        const previousIds = knownAlertIdsRef.current || new Set<string>()
+        const hasNewAlert = !isFirstLoad && alerts.some((a: any) => !previousIds.has(a.id))
+        if (hasNewAlert && soundEnabled) {
+          playNotificationSound()
+        }
+        knownAlertIdsRef.current = new Set(alerts.map((a: any) => a.id))
+        setDynamicAlerts(alerts)
+      }).catch(console.error)
     }
     fetchAlerts() // fetch initially
     const interval = setInterval(fetchAlerts, 5000) // poll every 5s
     return () => clearInterval(interval)
-  }, [pathname, role, config.empleadoId])
+  }, [pathname, role, config.empleadoId, soundEnabled])
 
   const handleDismiss = (id: string, e: React.MouseEvent) => {
     e.preventDefault()
@@ -109,6 +164,17 @@ export function Topbar({ onMenu, onToggleCollapse, isCollapsed }: { onMenu: () =
       </div>
 
       <div className="flex items-center justify-end gap-3 md:gap-5">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="text-muted-foreground hover:text-foreground"
+          onClick={toggleSound}
+          aria-label={soundEnabled ? 'Silenciar notificaciones' : 'Activar sonido de notificaciones'}
+          title={soundEnabled ? 'Silenciar notificaciones' : 'Activar sonido de notificaciones'}
+        >
+          {soundEnabled ? <Volume2 className="size-5" /> : <VolumeX className="size-5" />}
+        </Button>
+
         {/* Notificaciones */}
         <DropdownMenu>
           <DropdownMenuTrigger className="relative inline-flex shrink-0 items-center justify-center rounded-full text-sm font-medium transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 h-9 w-9" aria-label="Alertas">
