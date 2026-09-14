@@ -5,8 +5,8 @@ import { usePathname, useRouter } from 'next/navigation'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { 
-  AlertCircle, AlertTriangle, Info, Clock, ShieldCheck, Wrench, Fuel, Receipt, TriangleAlert
+import {
+  AlertCircle, AlertTriangle, Info, Clock, ShieldCheck, Wrench, Fuel, Receipt, TriangleAlert, Wallet
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -61,7 +61,7 @@ export function Topbar({ onMenu, onToggleCollapse, isCollapsed }: { onMenu: () =
 
   useEffect(() => {
     const fetchAlerts = () => {
-      getAlerts(role === 'conductor' ? config.empleadoId : undefined).then(setDynamicAlerts).catch(console.error)
+      getAlerts(role === 'conductor' ? config.empleadoId : undefined, role).then(setDynamicAlerts).catch(console.error)
     }
     fetchAlerts() // fetch initially
     const interval = setInterval(fetchAlerts, 5000) // poll every 5s
@@ -145,6 +145,7 @@ export function Topbar({ onMenu, onToggleCollapse, isCollapsed }: { onMenu: () =
                   if (a.href === '/seguros') ModuleIcon = ShieldCheck
                   else if (a.href === '/mantenimientos') ModuleIcon = Wrench
                   else if (a.href === '/combustible') ModuleIcon = Fuel
+                  else if (a.href === '/viaticos') ModuleIcon = Wallet
                   else if (a.href === '/gastos') ModuleIcon = Receipt
                   else if (a.href === '/incidencias') ModuleIcon = TriangleAlert
 

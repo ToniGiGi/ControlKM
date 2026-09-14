@@ -32,15 +32,16 @@ export default async function DashboardPage() {
   const role = (((session?.user as any)?.role as string)?.toLowerCase() || 'conductor') as
     | 'super_admin'
     | 'administrador'
+    | 'cuentas_por_pagar'
     | 'conductor'
   const isConductor = role === 'conductor'
   const empleadoId = (session?.user as any)?.employeeId || ''
   const nombre = session?.user?.name || session?.user?.email?.split('@')[0] || 'Usuario'
-  const label = role === 'super_admin' ? 'Super Admin' : role === 'administrador' ? 'Administrador' : 'Conductor'
+  const label = role === 'super_admin' ? 'Super Admin' : role === 'administrador' ? 'Administrador' : role === 'cuentas_por_pagar' ? 'Cuentas por Pagar' : 'Conductor'
 
   const [vehicles, visibleAlerts, monthlyExpensesData]: [any[], any[], any[]] = await Promise.all([
     getVehicles(),
-    getAlerts(isConductor ? empleadoId : undefined),
+    getAlerts(isConductor ? empleadoId : undefined, role),
     getMonthlyExpenses(isConductor ? empleadoId : undefined),
   ])
 

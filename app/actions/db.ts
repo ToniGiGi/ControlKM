@@ -752,13 +752,32 @@ export async function deleteIncident(id: string) {
   return inc
 }
 
-export async function getAlerts(empleadoId?: string) {
+export async function getAlerts(empleadoId?: string, role?: string) {
   const prisma = getPrisma()
   const generatedAlerts: any[] = [];
   const filter = empleadoId ? { vehiculo: { empleadoId } } : {};
 
-  // Optimized: 6 queries in PARALLEL instead of sequential
-  const [seguros, vehiculosSinSeguro, recientesIncidencias, recientesCombustible, recientesGastos, recientesMantenimientos] = await Promise.all([
+  const isConductor = role === 'conductor'
+  const isCuentasPorPagar = role === 'cuentas_por_pagar'
+  const sieteDiasAtras = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+
+  // Combustible: cada rol necesita ver una etapa distinta del flujo
+  // (PENDIENTE = por aprobar, APROBADA = por pagar, y el propio empleado
+  // quiere ver el estado de lo que él mismo subió).
+  const fuelRequestWhere = isCuentasPorPagar
+    ? { estado: 'APROBADA', updatedAt: { gte: sieteDiasAtras } }
+    : isConductor
+      ? { ...filter, OR: [{ estado: 'PENDIENTE' }, { estado: { in: ['APROBADA', 'RECHAZADA'] }, updatedAt: { gte: sieteDiasAtras } }] }
+      : { estado: 'PENDIENTE', ...filter }
+
+  const travelRequestWhere = isCuentasPorPagar
+    ? { estado: 'APROBADA', updatedAt: { gte: sieteDiasAtras } }
+    : isConductor
+      ? { ...(empleadoId ? { empleadoId } : {}), OR: [{ estado: 'PENDIENTE' }, { estado: { in: ['APROBADA', 'RECHAZADA'] }, updatedAt: { gte: sieteDiasAtras } }] }
+      : { estado: 'PENDIENTE' }
+
+  // Optimized: queries en PARALELO en vez de secuencial
+  const [seguros, vehiculosSinSeguro, recientesIncidencias, recientesCombustible, recientesViaticos, recientesGastos, recientesMantenimientos] = await Promise.all([
     prisma.insurance.findMany({
       where: { ...filter, OR: [{ estado: 'VIGENTE' }, { estado: 'VENCIDO' }] },
       include: { vehiculo: { select: { id: true, nombreInterno: true, marca: true } } }
@@ -774,10 +793,15 @@ export async function getAlerts(empleadoId?: string) {
       include: { vehiculo: { select: { id: true, nombreInterno: true, marca: true } } }
     }),
     prisma.fuelRequest.findMany({
-      where: { estado: 'PENDIENTE', ...filter },
-      orderBy: { createdAt: 'desc' },
+      where: fuelRequestWhere,
+      orderBy: { updatedAt: 'desc' },
       take: 5,
       include: { vehiculo: { select: { id: true, nombreInterno: true, marca: true } } }
+    }),
+    prisma.travelRequest.findMany({
+      where: travelRequestWhere,
+      orderBy: { updatedAt: 'desc' },
+      take: 5,
     }),
     prisma.expense.findMany({
       where: { estado: 'PENDIENTE', ...filter },
@@ -851,15 +875,111 @@ export async function getAlerts(empleadoId?: string) {
   });
 
   recientesCombustible.forEach(req => {
-    generatedAlerts.push({
-      id: `combustible-${req.id}`,
-      vehiculoId: req.vehiculoId,
-      tipo: 'Combustible por Aprobar',
-      mensaje: `Nueva solicitud de combustible por ${req.litrosSolicitados.toFixed(1)} Lts para ${req.vehiculo?.nombreInterno || req.vehiculo?.marca}`,
-      severidad: 'media',
-      href: '/combustible',
-      fecha: req.createdAt
-    });
+    const vehiculoNombre = req.vehiculo?.nombreInterno || req.vehiculo?.marca
+    if (isCuentasPorPagar) {
+      generatedAlerts.push({
+        id: `combustible-por-pagar-${req.id}`,
+        vehiculoId: req.vehiculoId,
+        tipo: 'Combustible por Pagar',
+        mensaje: `La solicitud de ${req.solicitanteNombre || 'un empleado'} para ${vehiculoNombre} ya tiene visto bueno y está pendiente de pago`,
+        severidad: 'media',
+        href: '/combustible',
+        fecha: req.updatedAt
+      });
+    } else if (isConductor && req.estado === 'PENDIENTE') {
+      generatedAlerts.push({
+        id: `combustible-enviada-${req.id}`,
+        vehiculoId: req.vehiculoId,
+        tipo: 'Solicitud Enviada',
+        mensaje: `Tu solicitud de combustible para ${vehiculoNombre} fue enviada y está pendiente de aprobación`,
+        severidad: 'baja',
+        href: '/combustible',
+        fecha: req.createdAt
+      });
+    } else if (isConductor && req.estado === 'APROBADA') {
+      generatedAlerts.push({
+        id: `combustible-aprobada-${req.id}`,
+        vehiculoId: req.vehiculoId,
+        tipo: 'Solicitud Aprobada',
+        mensaje: `Tu solicitud de combustible para ${vehiculoNombre} fue aprobada y está pendiente de pago`,
+        severidad: 'media',
+        href: '/combustible',
+        fecha: req.updatedAt
+      });
+    } else if (isConductor && req.estado === 'RECHAZADA') {
+      generatedAlerts.push({
+        id: `combustible-rechazada-${req.id}`,
+        vehiculoId: req.vehiculoId,
+        tipo: 'Solicitud Rechazada',
+        mensaje: req.observacionesRechazo
+          ? `Tu solicitud de combustible para ${vehiculoNombre} fue rechazada: ${req.observacionesRechazo}`
+          : `Tu solicitud de combustible para ${vehiculoNombre} fue rechazada`,
+        severidad: 'alta',
+        href: '/combustible',
+        fecha: req.updatedAt
+      });
+    } else if (!isConductor) {
+      generatedAlerts.push({
+        id: `combustible-${req.id}`,
+        vehiculoId: req.vehiculoId,
+        tipo: 'Combustible por Aprobar',
+        mensaje: `Nueva solicitud de combustible por ${req.litrosSolicitados.toFixed(1)} Lts para ${vehiculoNombre}`,
+        severidad: 'media',
+        href: '/combustible',
+        fecha: req.createdAt
+      });
+    }
+  });
+
+  recientesViaticos.forEach(req => {
+    if (isCuentasPorPagar) {
+      generatedAlerts.push({
+        id: `viaticos-por-pagar-${req.id}`,
+        tipo: 'Viáticos por Pagar',
+        mensaje: `La solicitud de viáticos de ${req.solicitanteNombre} ya tiene visto bueno y está pendiente de pago`,
+        severidad: 'media',
+        href: '/viaticos',
+        fecha: req.updatedAt
+      });
+    } else if (isConductor && req.estado === 'PENDIENTE') {
+      generatedAlerts.push({
+        id: `viaticos-enviada-${req.id}`,
+        tipo: 'Solicitud Enviada',
+        mensaje: `Tu solicitud de viáticos fue enviada y está pendiente de aprobación`,
+        severidad: 'baja',
+        href: '/viaticos',
+        fecha: req.createdAt
+      });
+    } else if (isConductor && req.estado === 'APROBADA') {
+      generatedAlerts.push({
+        id: `viaticos-aprobada-${req.id}`,
+        tipo: 'Solicitud Aprobada',
+        mensaje: `Tu solicitud de viáticos fue aprobada y está pendiente de pago`,
+        severidad: 'media',
+        href: '/viaticos',
+        fecha: req.updatedAt
+      });
+    } else if (isConductor && req.estado === 'RECHAZADA') {
+      generatedAlerts.push({
+        id: `viaticos-rechazada-${req.id}`,
+        tipo: 'Solicitud Rechazada',
+        mensaje: req.observacionesRechazo
+          ? `Tu solicitud de viáticos fue rechazada: ${req.observacionesRechazo}`
+          : `Tu solicitud de viáticos fue rechazada`,
+        severidad: 'alta',
+        href: '/viaticos',
+        fecha: req.updatedAt
+      });
+    } else if (!isConductor) {
+      generatedAlerts.push({
+        id: `viaticos-${req.id}`,
+        tipo: 'Viáticos por Aprobar',
+        mensaje: `Nueva solicitud de viáticos de ${req.solicitanteNombre} por $${req.costoTotal.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        severidad: 'media',
+        href: '/viaticos',
+        fecha: req.createdAt
+      });
+    }
   });
 
   recientesGastos.forEach(exp => {
