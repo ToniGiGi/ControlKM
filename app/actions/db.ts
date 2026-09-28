@@ -4,6 +4,7 @@ import { getPrisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import { hashPassword } from '@/lib/password'
 import { sendEmailToAdmins, sendEmailToAccountsPayable, sendEmailToDriver } from '@/lib/email'
+import { after } from 'next/server'
 
 // Genera folios secuenciales (QRQ-C-0001, QRQ-V-0001, ...) usando un contador
 // persistente en OrganizationConfig, para que nunca se reutilicen números aunque
@@ -522,14 +523,16 @@ export async function createFuelRequest(data: any) {
     include: { vehiculo: true }
   })
 
-  // Notificar a administradores
-  await sendEmailToAdmins('combustible', {
-    solicitanteNombre: req.solicitanteNombre || 'Desconocido',
-    monto: req.costoTotal,
-    motivo: req.motivo,
-    folio: req.folio,
-    fecha: req.fechaSolicitud || req.createdAt
-  }).catch(e => console.error("Error al notificar admin", e));
+  // Notificar a administradores en segundo plano
+  after(() => {
+    sendEmailToAdmins('combustible', {
+      solicitanteNombre: req.solicitanteNombre || 'Desconocido',
+      monto: req.costoTotal,
+      motivo: req.motivo,
+      folio: req.folio,
+      fecha: req.fechaSolicitud || req.createdAt
+    }).catch(e => console.error("Error al notificar admin", e));
+  });
 
   revalidatePath('/combustible')
   return req
@@ -556,14 +559,16 @@ export async function approveFuelRequest(id: string, firmaAprobadorUrl?: string)
     data: { estado: 'APROBADA', ...(firmaAprobadorUrl ? { firmaAprobadorUrl } : {}) }
   })
 
-  // Notificar a cuentas por pagar
-  await sendEmailToAccountsPayable('combustible', {
-    solicitanteNombre: req.solicitanteNombre || 'Desconocido',
-    monto: req.costoTotal,
-    motivo: req.motivo,
-    folio: req.folio,
-    fecha: req.fechaSolicitud || req.createdAt
-  }).catch(e => console.error("Error al notificar cpp", e));
+  // Notificar a cuentas por pagar en segundo plano
+  after(() => {
+    sendEmailToAccountsPayable('combustible', {
+      solicitanteNombre: req.solicitanteNombre || 'Desconocido',
+      monto: req.costoTotal,
+      motivo: req.motivo,
+      folio: req.folio,
+      fecha: req.fechaSolicitud || req.createdAt
+    }).catch(e => console.error("Error al notificar cpp", e));
+  });
 
   revalidatePath('/combustible')
   revalidatePath('/vehiculos')
@@ -589,14 +594,16 @@ export async function payFuelRequest(id: string, firmaPagoUrl: string) {
     data: { estado: 'PAGADA', firmaPagoUrl, fechaPago: new Date() }
   })
 
-  // Notificar al conductor
-  await sendEmailToDriver('combustible', {
-    solicitanteNombre: req.solicitanteNombre || 'Desconocido',
-    monto: req.costoTotal,
-    motivo: req.motivo,
-    folio: req.folio,
-    fecha: req.fechaSolicitud || req.createdAt
-  }, req.vehiculoId).catch(e => console.error("Error al notificar conductor", e));
+  // Notificar al conductor en segundo plano
+  after(() => {
+    sendEmailToDriver('combustible', {
+      solicitanteNombre: req.solicitanteNombre || 'Desconocido',
+      monto: req.costoTotal,
+      motivo: req.motivo,
+      folio: req.folio,
+      fecha: req.fechaSolicitud || req.createdAt
+    }, req.vehiculoId).catch(e => console.error("Error al notificar conductor", e));
+  });
 
   revalidatePath('/combustible')
   revalidatePath('/vehiculos')
@@ -619,13 +626,15 @@ export async function createTravelRequest(data: any) {
   const folio = await getNextFolio(prisma, 'lastTravelFolio', 'QRQ-V')
   const req = await prisma.travelRequest.create({ data: { ...data, folio } })
 
-  await sendEmailToAdmins('viatico', {
-    solicitanteNombre: req.solicitanteNombre,
-    monto: req.costoTotal,
-    motivo: 'Viáticos de viaje',
-    folio: req.folio,
-    fecha: req.fecha || req.createdAt
-  }).catch(e => console.error("Error al notificar admin", e));
+  after(() => {
+    sendEmailToAdmins('viatico', {
+      solicitanteNombre: req.solicitanteNombre,
+      monto: req.costoTotal,
+      motivo: 'Viáticos de viaje',
+      folio: req.folio,
+      fecha: req.fecha || req.createdAt
+    }).catch(e => console.error("Error al notificar admin", e));
+  });
 
   revalidatePath('/viaticos')
   return req
@@ -645,13 +654,15 @@ export async function approveTravelRequest(id: string, firmaAprobadorUrl?: strin
     data: { estado: 'APROBADA', ...(firmaAprobadorUrl ? { firmaAprobadorUrl } : {}) }
   })
 
-  await sendEmailToAccountsPayable('viatico', {
-    solicitanteNombre: req.solicitanteNombre,
-    monto: req.costoTotal,
-    motivo: 'Viáticos de viaje',
-    folio: req.folio,
-    fecha: req.fecha || req.createdAt
-  }).catch(e => console.error("Error al notificar cpp", e));
+  after(() => {
+    sendEmailToAccountsPayable('viatico', {
+      solicitanteNombre: req.solicitanteNombre,
+      monto: req.costoTotal,
+      motivo: 'Viáticos de viaje',
+      folio: req.folio,
+      fecha: req.fecha || req.createdAt
+    }).catch(e => console.error("Error al notificar cpp", e));
+  });
 
   revalidatePath('/viaticos')
   return req
@@ -675,13 +686,15 @@ export async function payTravelRequest(id: string, firmaPagoUrl: string) {
     data: { estado: 'PAGADA', firmaPagoUrl, fechaPago: new Date() }
   })
 
-  await sendEmailToDriver('viatico', {
-    solicitanteNombre: req.solicitanteNombre,
-    monto: req.costoTotal,
-    motivo: 'Viáticos de viaje',
-    folio: req.folio,
-    fecha: req.fecha || req.createdAt
-  }, null, req.empleadoId).catch(e => console.error("Error al notificar conductor", e));
+  after(() => {
+    sendEmailToDriver('viatico', {
+      solicitanteNombre: req.solicitanteNombre,
+      monto: req.costoTotal,
+      motivo: 'Viáticos de viaje',
+      folio: req.folio,
+      fecha: req.fecha || req.createdAt
+    }, null, req.empleadoId).catch(e => console.error("Error al notificar conductor", e));
+  });
 
   revalidatePath('/viaticos')
   return req
