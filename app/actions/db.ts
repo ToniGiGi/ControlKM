@@ -35,15 +35,15 @@ export async function getVehicles() {
       }
     }),
     prisma.expense.findMany({
-      where: { estado: 'APROBADA' },
+      where: { estado: { in: ['APROBADA', 'PAGADA'] } },
       select: { vehiculoId: true, categoria: true, monto: true }
     }),
     prisma.maintenance.findMany({
-      where: { estado: 'APROBADA' },
+      where: { estado: { in: ['APROBADA', 'PAGADA'] } },
       select: { vehiculoId: true, costo: true, km: true }
     }),
     prisma.fuelRequest.findMany({
-      where: { estado: 'APROBADA' },
+      where: { estado: { in: ['APROBADA', 'PAGADA'] } },
       select: { vehiculoId: true, costoGasolina: true, costoCasetas: true, costoComidas: true }
     })
   ])
