@@ -69,6 +69,7 @@ export function FuelRequestForm({ vehicles, departments, defaultDepartamentoId }
     let perf = 10;
     let fuel: keyof typeof GAS_PRICES = 'VERDE';
 
+    // Determinar valores por defecto (rendimiento y fuel fallback)
     if (name.includes('byd king')) { fuel = 'VERDE'; perf = 18; }
     else if (name.includes('ducato')) { fuel = 'DIESEL'; perf = 10; }
     else if (name.includes('fiat mobi')) { fuel = 'VERDE'; perf = 17; }
@@ -84,10 +85,12 @@ export function FuelRequestForm({ vehicles, departments, defaultDepartamentoId }
     else if (name.includes('ram') || name.includes('promaster')) { fuel = 'VERDE'; perf = 13; }
     else if (name.includes('sunray')) { fuel = 'ROJA'; perf = 11; }
     else if (name.includes('tornado')) { fuel = 'VERDE'; perf = 16; }
-    else {
-      // Fallback a los datos del vehículo si existen, sino verde genérico
-      if (selectedVehicle.combustible && ['VERDE', 'ROJA', 'DIESEL'].includes(selectedVehicle.combustible)) {
-        fuel = selectedVehicle.combustible as keyof typeof GAS_PRICES;
+
+    // Si el vehículo tiene combustible definido en la DB, sobrescribe el fallback
+    if (selectedVehicle.combustible) {
+      const dbFuel = selectedVehicle.combustible.toUpperCase();
+      if (['VERDE', 'ROJA', 'DIESEL'].includes(dbFuel)) {
+        fuel = dbFuel as keyof typeof GAS_PRICES;
       }
     }
 
