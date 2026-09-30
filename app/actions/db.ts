@@ -4,7 +4,7 @@ import { getPrisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import { hashPassword } from '@/lib/password'
 import { sendEmailToAdmins, sendEmailToAccountsPayable, sendEmailToDriver } from '@/lib/email'
-import { after } from 'next/server'
+import { runInBackground } from '@/lib/background'
 
 // Genera folios secuenciales (QRQ-C-0001, QRQ-V-0001, ...) usando un contador
 // persistente en OrganizationConfig, para que nunca se reutilicen números aunque
@@ -525,8 +525,8 @@ export async function createFuelRequest(data: any) {
   })
 
   // Notificar a administradores en segundo plano
-  after(() => {
-    sendEmailToAdmins('combustible', {
+  runInBackground(() => {
+    return sendEmailToAdmins('combustible', {
       solicitanteNombre: req.solicitanteNombre || 'Desconocido',
       monto: req.costoTotal,
       motivo: req.motivo,
@@ -561,8 +561,8 @@ export async function approveFuelRequest(id: string, firmaAprobadorUrl?: string)
   })
 
   // Notificar a cuentas por pagar en segundo plano
-  after(() => {
-    sendEmailToAccountsPayable('combustible', {
+  runInBackground(() => {
+    return sendEmailToAccountsPayable('combustible', {
       solicitanteNombre: req.solicitanteNombre || 'Desconocido',
       monto: req.costoTotal,
       motivo: req.motivo,
@@ -596,8 +596,8 @@ export async function payFuelRequest(id: string, firmaPagoUrl: string) {
   })
 
   // Notificar al conductor en segundo plano
-  after(() => {
-    sendEmailToDriver('combustible', {
+  runInBackground(() => {
+    return sendEmailToDriver('combustible', {
       solicitanteNombre: req.solicitanteNombre || 'Desconocido',
       monto: req.costoTotal,
       motivo: req.motivo,
@@ -627,8 +627,8 @@ export async function createTravelRequest(data: any) {
   const folio = await getNextFolio(prisma, 'lastTravelFolio', 'QRQ-V')
   const req = await prisma.travelRequest.create({ data: { ...data, folio } })
 
-  after(() => {
-    sendEmailToAdmins('viatico', {
+  runInBackground(() => {
+    return sendEmailToAdmins('viatico', {
       solicitanteNombre: req.solicitanteNombre,
       monto: req.costoTotal,
       motivo: 'Viáticos de viaje',
@@ -655,8 +655,8 @@ export async function approveTravelRequest(id: string, firmaAprobadorUrl?: strin
     data: { estado: 'APROBADA', ...(firmaAprobadorUrl ? { firmaAprobadorUrl } : {}) }
   })
 
-  after(() => {
-    sendEmailToAccountsPayable('viatico', {
+  runInBackground(() => {
+    return sendEmailToAccountsPayable('viatico', {
       solicitanteNombre: req.solicitanteNombre,
       monto: req.costoTotal,
       motivo: 'Viáticos de viaje',
@@ -687,8 +687,8 @@ export async function payTravelRequest(id: string, firmaPagoUrl: string) {
     data: { estado: 'PAGADA', firmaPagoUrl, fechaPago: new Date() }
   })
 
-  after(() => {
-    sendEmailToDriver('viatico', {
+  runInBackground(() => {
+    return sendEmailToDriver('viatico', {
       solicitanteNombre: req.solicitanteNombre,
       monto: req.costoTotal,
       motivo: 'Viáticos de viaje',

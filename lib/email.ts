@@ -14,7 +14,7 @@ export async function sendEmailToAdmins(
   try {
     const prisma = getPrisma();
     const admins = await prisma.user.findMany({
-      where: { role: 'administrador' },
+      where: { role: 'ADMINISTRADOR' },
       select: { email: true }
     });
     const emails = admins.map((a: { email: string }) => a.email).filter(Boolean);
@@ -54,7 +54,7 @@ export async function sendEmailToAccountsPayable(
   try {
     const prisma = getPrisma();
     const accounts = await prisma.user.findMany({
-      where: { role: 'cuentas_por_pagar' },
+      where: { role: 'CUENTAS_POR_PAGAR' },
       select: { email: true }
     });
     const emails = accounts.map((a: { email: string }) => a.email).filter(Boolean);
