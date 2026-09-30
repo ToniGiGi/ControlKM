@@ -536,7 +536,7 @@ export async function createFuelRequest(data: any) {
   });
 
   revalidatePath('/combustible')
-  return req
+  return { success: true, folio: req.folio }
 }
 
 export async function updateFuelRequest(id: string, data: any) {
