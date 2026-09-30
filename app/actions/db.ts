@@ -3,8 +3,6 @@
 import { getPrisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import { hashPassword } from '@/lib/password'
-import { sendEmailToAdmins, sendEmailToAccountsPayable, sendEmailToDriver } from '@/lib/email'
-import { runInBackground } from '@/lib/background'
 
 // Genera folios secuenciales (QRQ-C-0001, QRQ-V-0001, ...) usando un contador
 // persistente en OrganizationConfig, para que nunca se reutilicen números aunque
@@ -524,17 +522,6 @@ export async function createFuelRequest(data: any) {
     include: { vehiculo: true }
   })
 
-  // Notificar a administradores en segundo plano
-  runInBackground(() => {
-    return sendEmailToAdmins('combustible', {
-      solicitanteNombre: req.solicitanteNombre || 'Desconocido',
-      monto: req.costoTotal,
-      motivo: req.motivo,
-      folio: req.folio,
-      fecha: req.fechaSolicitud || req.createdAt
-    }).catch(e => console.error("Error al notificar admin", e));
-  });
-
   revalidatePath('/combustible')
   return { success: true, folio: req.folio }
 }
@@ -560,17 +547,6 @@ export async function approveFuelRequest(id: string, firmaAprobadorUrl?: string)
     data: { estado: 'APROBADA', ...(firmaAprobadorUrl ? { firmaAprobadorUrl } : {}) }
   })
 
-  // Notificar a cuentas por pagar en segundo plano
-  runInBackground(() => {
-    return sendEmailToAccountsPayable('combustible', {
-      solicitanteNombre: req.solicitanteNombre || 'Desconocido',
-      monto: req.costoTotal,
-      motivo: req.motivo,
-      folio: req.folio,
-      fecha: req.fechaSolicitud || req.createdAt
-    }).catch(e => console.error("Error al notificar cpp", e));
-  });
-
   revalidatePath('/combustible')
   revalidatePath('/vehiculos')
   return req
@@ -595,17 +571,6 @@ export async function payFuelRequest(id: string, firmaPagoUrl: string) {
     data: { estado: 'PAGADA', firmaPagoUrl, fechaPago: new Date() }
   })
 
-  // Notificar al conductor en segundo plano
-  runInBackground(() => {
-    return sendEmailToDriver('combustible', {
-      solicitanteNombre: req.solicitanteNombre || 'Desconocido',
-      monto: req.costoTotal,
-      motivo: req.motivo,
-      folio: req.folio,
-      fecha: req.fechaSolicitud || req.createdAt
-    }, req.vehiculoId).catch(e => console.error("Error al notificar conductor", e));
-  });
-
   revalidatePath('/combustible')
   revalidatePath('/vehiculos')
   return req
@@ -627,16 +592,6 @@ export async function createTravelRequest(data: any) {
   const folio = await getNextFolio(prisma, 'lastTravelFolio', 'QRQ-V')
   const req = await prisma.travelRequest.create({ data: { ...data, folio } })
 
-  runInBackground(() => {
-    return sendEmailToAdmins('viatico', {
-      solicitanteNombre: req.solicitanteNombre,
-      monto: req.costoTotal,
-      motivo: 'Viáticos de viaje',
-      folio: req.folio,
-      fecha: req.fecha || req.createdAt
-    }).catch(e => console.error("Error al notificar admin", e));
-  });
-
   revalidatePath('/viaticos')
   return req
 }
@@ -654,16 +609,6 @@ export async function approveTravelRequest(id: string, firmaAprobadorUrl?: strin
     where: { id },
     data: { estado: 'APROBADA', ...(firmaAprobadorUrl ? { firmaAprobadorUrl } : {}) }
   })
-
-  runInBackground(() => {
-    return sendEmailToAccountsPayable('viatico', {
-      solicitanteNombre: req.solicitanteNombre,
-      monto: req.costoTotal,
-      motivo: 'Viáticos de viaje',
-      folio: req.folio,
-      fecha: req.fecha || req.createdAt
-    }).catch(e => console.error("Error al notificar cpp", e));
-  });
 
   revalidatePath('/viaticos')
   return req
@@ -686,16 +631,6 @@ export async function payTravelRequest(id: string, firmaPagoUrl: string) {
     where: { id },
     data: { estado: 'PAGADA', firmaPagoUrl, fechaPago: new Date() }
   })
-
-  runInBackground(() => {
-    return sendEmailToDriver('viatico', {
-      solicitanteNombre: req.solicitanteNombre,
-      monto: req.costoTotal,
-      motivo: 'Viáticos de viaje',
-      folio: req.folio,
-      fecha: req.fecha || req.createdAt
-    }, null, req.empleadoId).catch(e => console.error("Error al notificar conductor", e));
-  });
 
   revalidatePath('/viaticos')
   return req
