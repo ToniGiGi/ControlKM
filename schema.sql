@@ -41,6 +41,7 @@ CREATE TABLE "Vehicle" (
     "color" TEXT,
     "combustible" TEXT,
     "capacidadTanque" REAL,
+    "rendimiento" REAL DEFAULT 10.0,
     "kmInicial" INTEGER NOT NULL DEFAULT 0,
     "kmActual" INTEGER NOT NULL DEFAULT 0,
     "estado" TEXT NOT NULL DEFAULT 'ACTIVO',

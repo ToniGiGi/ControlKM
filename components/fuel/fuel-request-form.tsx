@@ -94,6 +94,10 @@ export function FuelRequestForm({ vehicles, departments, defaultDepartamentoId }
       }
     }
 
+    if (selectedVehicle.rendimiento) {
+      perf = selectedVehicle.rendimiento;
+    }
+
     setTipoGasolina(fuel);
     setRendimiento(perf);
   }, [vehiculoId, vehicles])

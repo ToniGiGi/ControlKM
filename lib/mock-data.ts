@@ -72,6 +72,7 @@ export interface Vehicle {
   color: string
   combustible: string
   capacidadTanque: number
+  rendimiento?: number
   kmInicial: number
   kmActual: number
   estado: VehicleStatus

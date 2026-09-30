@@ -67,6 +67,7 @@ model Vehicle {
   capacidadTanque           Float?
   kmInicial                 Int           @default(0)
   kmActual                  Int           @default(0)
+  rendimiento               Float?        @default(10.0)
   estado                    String        @default("ACTIVO")
   fechaAsignacion           DateTime?
   sucursal                  String?       // deprecated: usar sucursalId. Se mantiene por compatibilidad histórica.

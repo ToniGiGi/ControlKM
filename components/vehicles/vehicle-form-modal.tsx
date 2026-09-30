@@ -48,6 +48,7 @@ export function VehicleFormModal({ isOpen, onClose, onSave, vehicle, sucursales 
     fotoUrl: '',
     // Valores por defecto que no se llenan en este form inicial
     capacidadTanque: 50,
+    rendimiento: 10,
     kmInicial: 0,
     kmActual: 0,
     empleadoId: null,
@@ -73,6 +74,7 @@ export function VehicleFormModal({ isOpen, onClose, onSave, vehicle, sucursales 
         estado: 'activo',
         fotoUrl: '',
         capacidadTanque: 50,
+        rendimiento: 10,
         kmInicial: 0,
         kmActual: 0,
         empleadoId: null,
@@ -179,6 +181,11 @@ export function VehicleFormModal({ isOpen, onClose, onSave, vehicle, sucursales 
             <div className="space-y-1.5 md:col-span-2">
               <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5"><Hash className="size-3.5" /> Número VIN (Opcional)</label>
               <Input value={formData.vin || ''} onChange={(e) => handleChange('vin', e.target.value)} placeholder="17 caracteres" />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5"><Activity className="size-3.5" /> Rendimiento (Km/L)</label>
+              <Input required type="number" step="0.1" min="1" value={formData.rendimiento || ''} onChange={(e) => handleChange('rendimiento', parseFloat(e.target.value))} placeholder="Ej. 10.5" />
             </div>
 
             <div className="space-y-1.5">

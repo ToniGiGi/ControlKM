@@ -13,8 +13,13 @@ import { PrismaLibSQL } from '@prisma/adapter-libsql'
 // cliente (barato: no abre conexión hasta la primera consulta) para que
 // nunca se comparta estado entre peticiones.
 export function getPrisma() {
+  let dbUrl = process.env.DATABASE_URL || 'file:./dev.db'
+  if (dbUrl.startsWith('libsql://')) {
+    dbUrl = dbUrl.replace('libsql://', 'https://')
+  }
+
   const libsql = createClient({
-    url: process.env.DATABASE_URL || 'file:./dev.db',
+    url: dbUrl,
     authToken: process.env.TURSO_AUTH_TOKEN,
   })
   const adapter = new PrismaLibSQL(libsql)

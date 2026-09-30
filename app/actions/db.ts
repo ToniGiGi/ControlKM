@@ -197,7 +197,7 @@ export async function getEmployees() {
 function cleanVehicleData(data: any) {
   const allowedFields = [
     'nombreInterno', 'marca', 'modelo', 'anio', 'tipoUnidad', 'placas',
-    'vin', 'numeroEconomico', 'color', 'combustible', 'capacidadTanque',
+    'vin', 'numeroEconomico', 'color', 'combustible', 'capacidadTanque', 'rendimiento',
     'kmInicial', 'kmActual', 'estado', 'fechaAsignacion', 'sucursalId',
     'proximoMantenimientoFecha', 'proximoMantenimientoKm', 'empleadoId', 'fotoUrl'
   ];
@@ -212,6 +212,7 @@ function cleanVehicleData(data: any) {
   if (clean.estado) clean.estado = clean.estado.toUpperCase();
   if (clean.anio !== undefined && clean.anio !== null) clean.anio = Number(clean.anio);
   if (clean.capacidadTanque !== undefined && clean.capacidadTanque !== null) clean.capacidadTanque = Number(clean.capacidadTanque);
+  if (clean.rendimiento !== undefined && clean.rendimiento !== null) clean.rendimiento = Number(clean.rendimiento);
   if (clean.kmInicial !== undefined && clean.kmInicial !== null) clean.kmInicial = Number(clean.kmInicial);
   if (clean.kmActual !== undefined && clean.kmActual !== null) clean.kmActual = Number(clean.kmActual);
   
