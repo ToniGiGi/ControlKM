@@ -10,13 +10,24 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent } from '@/components/ui/card'
 import { createFuelRequest } from '@/app/actions/db'
 import { useRole } from '@/components/role-provider'
-import { RouteMap } from './route-map'
+import { RouteMap, legColor, type MapMarker, type MapRoute } from './route-map'
 import { SignatureModal } from '@/components/shared/signature-modal'
 
 const GAS_PRICES = {
   VERDE: 23.79,
   ROJA: 28.55,
   DIESEL: 28.00
+}
+
+type Coord = { lat: number; lon: number }
+
+type RouteLeg = {
+  origen: string
+  destino: string
+  tipo: 'sencillo' | 'redondo'
+  km: number | ''
+  // Ruta ya trazada en el mapa. `chained` = su origen es el destino del tramo anterior.
+  geo?: { orig: Coord; dest: Coord; coords: [number, number][]; chained: boolean }
 }
 
 type FuelRequestFormProps = {
@@ -103,16 +114,13 @@ export function FuelRequestForm({ vehicles, departments, defaultDepartamentoId }
   }, [vehiculoId, vehicles])
   
   // Ruta y Calculadora
-  const [routeLegs, setRouteLegs] = useState([{ origen: '', destino: '', tipo: 'sencillo', km: '' as number | '' }])
+  const [routeLegs, setRouteLegs] = useState<RouteLeg[]>([{ origen: '', destino: '', tipo: 'sencillo', km: '' }])
   const [holgura, setHolgura] = useState<number>(100)
   const [rendimiento, setRendimiento] = useState<number>(10)
   const [tipoGasolina, setTipoGasolina] = useState<keyof typeof GAS_PRICES>('VERDE')
-  
+
   // Mapa
-  const [mapCoordinates, setMapCoordinates] = useState<[number, number][]>([])
-  const [mapMarkers, setMapMarkers] = useState<{lat: number, lng: number, title: string, role?: 'origen' | 'destino'}[]>([])
   const [isCalculatingRoute, setIsCalculatingRoute] = useState(false)
-  const [activeLegIndex, setActiveLegIndex] = useState<number | null>(null)
   const [mapFitKey, setMapFitKey] = useState(0)
   
   // Extras
@@ -137,20 +145,39 @@ export function FuelRequestForm({ vehicles, departments, defaultDepartamentoId }
     setTarjetaToka(formatted)
   }
 
+  // Con varios tramos cada uno cuenta como sencillo; el nuevo tramo arranca donde terminó el anterior.
   const addRouteLeg = () => {
-    setRouteLegs([...routeLegs, { origen: '', destino: '', tipo: 'sencillo', km: '' }])
+    setRouteLegs(prev => [
+      ...prev.map(l => ({ ...l, tipo: 'sencillo' as const })),
+      { origen: prev[prev.length - 1].destino, destino: '', tipo: 'sencillo', km: '' },
+    ])
   }
 
-  const updateRouteLeg = (index: number, field: string, value: any) => {
-    const newLegs = [...routeLegs]
-    newLegs[index] = { ...newLegs[index], [field]: value }
-    setRouteLegs(newLegs)
+  const updateRouteLeg = (index: number, field: 'origen' | 'destino' | 'tipo' | 'km', value: any) => {
+    setRouteLegs(prev => {
+      const legs = [...prev]
+      const old = legs[index]
+      legs[index] = { ...old, [field]: value }
+      if (field === 'origen' || field === 'destino') {
+        legs[index].geo = undefined
+      }
+      // Si el siguiente tramo seguía saliendo de este destino, se mantiene sincronizado.
+      const next = legs[index + 1]
+      if (field === 'destino' && next && next.origen === old.destino) {
+        legs[index + 1] = { ...next, origen: value, geo: undefined }
+      }
+      return legs
+    })
   }
 
   const removeRouteLeg = (index: number) => {
-    if (routeLegs.length > 1) {
-      setRouteLegs(routeLegs.filter((_, i) => i !== index))
-    }
+    setRouteLegs(prev => {
+      if (prev.length <= 1) return prev
+      const legs = prev.filter((_, i) => i !== index)
+      const shifted = legs[index]
+      if (shifted?.geo) legs[index] = { ...shifted, geo: { ...shifted.geo, chained: false } }
+      return legs
+    })
   }
 
   const geocode = async (address: string) => {
@@ -180,33 +207,53 @@ export function FuelRequestForm({ vehicles, departments, defaultDepartamentoId }
     return null;
   }
 
+  const applyLegRoute = async (index: number, orig: Coord, dest: Coord, chained: boolean) => {
+    const routeInfo = await getRouteInfo(orig, dest);
+    if (!routeInfo) return false;
+    setRouteLegs(prev => {
+      if (!prev[index]) return prev;
+      const legs = [...prev];
+      legs[index] = {
+        ...legs[index],
+        km: Math.round(routeInfo.distanceKm),
+        geo: { orig, dest, coords: routeInfo.coordinates, chained },
+      };
+      return legs;
+    });
+    return true;
+  }
+
+  // Si el siguiente tramo sale de este destino, su ruta se recalcula desde el nuevo punto.
+  const syncNextLeg = async (index: number, newDest: Coord) => {
+    const next = routeLegs[index + 1];
+    if (next?.geo?.chained) {
+      await applyLegRoute(index + 1, newDest, next.geo.dest, true);
+    }
+  }
+
   const calculateLegRoute = async (index: number) => {
     const leg = routeLegs[index];
     if (!leg.origen || !leg.destino) {
       alert("Por favor ingresa Origen y Destino primero.");
       return;
     }
-    
+
+    const prevLeg = index > 0 ? routeLegs[index - 1] : null;
+    const chained = !!(prevLeg?.geo && prevLeg.destino.trim() === leg.origen.trim());
+
     setIsCalculatingRoute(true);
     try {
-      const origCoord = await geocode(leg.origen);
+      // Si sale del destino anterior se reutiliza ese punto exacto (incluso si se ajustó arrastrando el pin).
+      const origCoord = chained ? prevLeg!.geo!.dest : await geocode(leg.origen);
       const destCoord = await geocode(leg.destino);
-      
+
       if (!origCoord || !destCoord) {
         alert("No se pudo encontrar las coordenadas de Origen o Destino en el mapa. Revisa la escritura.");
         return;
       }
 
-      const routeInfo = await getRouteInfo(origCoord, destCoord);
-      if (routeInfo) {
-        updateRouteLeg(index, 'km', Math.round(routeInfo.distanceKm));
-
-        setMapCoordinates(routeInfo.coordinates);
-        setMapMarkers([
-          { lat: origCoord.lat, lng: origCoord.lon, title: `Origen: ${leg.origen}`, role: 'origen' },
-          { lat: destCoord.lat, lng: destCoord.lon, title: `Destino: ${leg.destino}`, role: 'destino' }
-        ]);
-        setActiveLegIndex(index);
+      if (await applyLegRoute(index, origCoord, destCoord, chained)) {
+        await syncNextLeg(index, destCoord);
         setMapFitKey(k => k + 1);
       } else {
         alert("No se pudo trazar una ruta en carretera entre estos puntos.");
@@ -219,28 +266,20 @@ export function FuelRequestForm({ vehicles, departments, defaultDepartamentoId }
     }
   }
 
-  const handleMarkerDragEnd = async (role: 'origen' | 'destino', lat: number, lng: number) => {
-    if (activeLegIndex === null) return;
-    const otherRole = role === 'origen' ? 'destino' : 'origen';
-    const otherMarker = mapMarkers.find(m => m.role === otherRole);
-    if (!otherMarker) return;
-
-    const updatedMarkers = mapMarkers.map(m =>
-      m.role === role ? { ...m, lat, lng } : m
-    );
-    setMapMarkers(updatedMarkers);
+  const handleMarkerDragEnd = async (legIndex: number, role: 'origen' | 'destino', lat: number, lng: number) => {
+    const geo = routeLegs[legIndex]?.geo;
+    if (!geo) return;
+    const point = { lat, lon: lng };
 
     setIsCalculatingRoute(true);
     try {
-      const origCoord = role === 'origen' ? { lat, lon: lng } : { lat: otherMarker.lat, lon: otherMarker.lng };
-      const destCoord = role === 'destino' ? { lat, lon: lng } : { lat: otherMarker.lat, lon: otherMarker.lng };
-
-      const routeInfo = await getRouteInfo(origCoord, destCoord);
-      if (routeInfo) {
-        setMapCoordinates(routeInfo.coordinates);
-        updateRouteLeg(activeLegIndex, 'km', Math.round(routeInfo.distanceKm));
-      } else {
+      const ok = role === 'origen'
+        ? await applyLegRoute(legIndex, point, geo.dest, geo.chained)
+        : await applyLegRoute(legIndex, geo.orig, point, geo.chained);
+      if (!ok) {
         alert("No se pudo trazar una ruta en carretera desde el punto ajustado.");
+      } else if (role === 'destino') {
+        await syncNextLeg(legIndex, point);
       }
     } catch (err) {
       console.error(err);
@@ -249,6 +288,28 @@ export function FuelRequestForm({ vehicles, departments, defaultDepartamentoId }
       setIsCalculatingRoute(false);
     }
   }
+
+  const mapRoutes: MapRoute[] = routeLegs.flatMap((leg, i) =>
+    leg.geo ? [{ coordinates: leg.geo.coords, color: legColor(i).hex }] : []
+  )
+
+  // Un tramo encadenado comparte su origen con el destino del anterior, así que no se repite ese pin.
+  const mapMarkers: MapMarker[] = routeLegs.flatMap((leg, i) => {
+    if (!leg.geo) return []
+    const multi = routeLegs.length > 1
+    const markers: MapMarker[] = []
+    if (!(leg.geo.chained && routeLegs[i - 1]?.geo)) {
+      markers.push({
+        lat: leg.geo.orig.lat, lng: leg.geo.orig.lon, color: 'blue', legIndex: i, role: 'origen',
+        title: `${multi && i > 0 ? `Origen tramo ${i + 1}` : 'Salida'}: ${leg.origen}`,
+      })
+    }
+    markers.push({
+      lat: leg.geo.dest.lat, lng: leg.geo.dest.lon, color: legColor(i).name, legIndex: i, role: 'destino',
+      title: `${multi ? `Destino ${i + 1}` : 'Destino'}: ${leg.destino}`,
+    })
+    return markers
+  })
 
   // Motor de Calculadora Inteligente
   useEffect(() => {
@@ -440,7 +501,11 @@ export function FuelRequestForm({ vehicles, departments, defaultDepartamentoId }
                   <Map className="size-5" />
                   2. Rutas del Viaje
                 </h3>
-                <p className="text-sm text-muted-foreground">Agrega todos los tramos de tu ruta. Los viajes redondos multiplican el kilometraje por 2.</p>
+                <p className="text-sm text-muted-foreground">
+                  {routeLegs.length > 1
+                    ? 'Cada tramo inicia donde terminó el anterior y cuenta como viaje sencillo.'
+                    : 'Agrega todos los tramos de tu ruta. Los viajes redondos multiplican el kilometraje por 2.'}
+                </p>
               </div>
               <Button type="button" variant="outline" size="sm" onClick={addRouteLeg} className="hidden sm:flex">
                 + Agregar Tramo
@@ -455,19 +520,26 @@ export function FuelRequestForm({ vehicles, departments, defaultDepartamentoId }
                     <Input required placeholder="Ej. Querétaro" value={leg.origen} onChange={e => updateRouteLeg(index, 'origen', e.target.value)} />
                   </div>
                   <div className="w-full flex flex-col justify-end gap-1.5">
-                    <Label className="text-xs">Destino <span className="text-destructive">*</span></Label>
+                    <Label className="text-xs flex items-center gap-1.5">
+                      {routeLegs.length > 1 && (
+                        <span className="size-2.5 rounded-full shrink-0" style={{ backgroundColor: legColor(index).hex }} />
+                      )}
+                      {routeLegs.length > 1 ? `Destino ${index + 1}` : 'Destino'} <span className="text-destructive">*</span>
+                    </Label>
                     <Input required placeholder="Ej. Xalapa" value={leg.destino} onChange={e => updateRouteLeg(index, 'destino', e.target.value)} />
                   </div>
-                  <div className="w-full sm:w-40 flex flex-col justify-end gap-1.5">
-                    <Label className="text-xs whitespace-nowrap">Tipo de Viaje</Label>
-                    <Select value={leg.tipo} onValueChange={v => updateRouteLeg(index, 'tipo', v)}>
-                      <SelectTrigger><SelectValue/></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="sencillo">Sencillo (Ida)</SelectItem>
-                        <SelectItem value="redondo">Redondo (Ida y Vuelta)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  {routeLegs.length === 1 && (
+                    <div className="w-full sm:w-40 flex flex-col justify-end gap-1.5">
+                      <Label className="text-xs whitespace-nowrap">Tipo de Viaje</Label>
+                      <Select value={leg.tipo} onValueChange={v => updateRouteLeg(index, 'tipo', v)}>
+                        <SelectTrigger><SelectValue/></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="sencillo">Sencillo (Ida)</SelectItem>
+                          <SelectItem value="redondo">Redondo (Ida y Vuelta)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                   <div className="w-full sm:w-32 flex flex-col justify-end gap-1.5">
                     <Label className="text-xs whitespace-nowrap">Distancia (km) <span className="text-destructive">*</span></Label>
                     <Input required type="number" min="1" placeholder="km" value={leg.km} onChange={e => updateRouteLeg(index, 'km', e.target.value ? Number(e.target.value) : '')} />
@@ -494,11 +566,13 @@ export function FuelRequestForm({ vehicles, departments, defaultDepartamentoId }
             
             {/* Mapa Preview */}
             <div className="w-full pt-4 space-y-2">
-              <RouteMap routeCoordinates={mapCoordinates} markers={mapMarkers} onMarkerDragEnd={handleMarkerDragEnd} fitKey={mapFitKey} />
+              <RouteMap routes={mapRoutes} markers={mapMarkers} onMarkerDragEnd={handleMarkerDragEnd} fitKey={mapFitKey} />
               {mapMarkers.length > 0 && (
                 <p className="text-xs text-muted-foreground flex items-center gap-1.5">
                   <Navigation className="size-3.5" />
-                  Si el punto no es exacto, arrastra los marcadores azul (origen) y rojo (destino) en el mapa para ajustarlos. Los km se recalculan automáticamente.
+                  {routeLegs.length > 1
+                    ? 'El pin azul es la salida y cada destino tiene su color. Si un punto no es exacto, arrástralo en el mapa; los km se recalculan automáticamente.'
+                    : 'Si el punto no es exacto, arrastra los marcadores azul (origen) y rojo (destino) en el mapa para ajustarlos. Los km se recalculan automáticamente.'}
                 </p>
               )}
             </div>

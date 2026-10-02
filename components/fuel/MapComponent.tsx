@@ -4,6 +4,7 @@ import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap } from 'react-
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { useEffect } from 'react';
+import type { MapMarker, MapRoute } from './route-map';
 
 // Corrección para los iconos de Leaflet en Next.js
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -13,31 +14,36 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
-// Íconos explícitos para origen (azul) y destino (rojo).
 // IMPORTANTE: nunca pasar `icon={undefined}` a un <Marker> - Leaflet mezcla las opciones
 // con Object.assign, así que un valor undefined explícito borra su ícono por defecto
 // interno y provoca "Cannot read properties of undefined (reading 'createIcon')".
-const origenIcon = new L.Icon.Default();
-const destinoIcon = new L.Icon({
-  iconUrl: 'https://cdn.jsdelivr.net/gh/pointhi/leaflet-color-markers@master/img/marker-icon-2x-red.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41],
-});
+const iconCache: Record<string, L.Icon<L.BaseIconOptions>> = {};
+function getIcon(color: string): L.Icon<L.BaseIconOptions> {
+  if (!iconCache[color]) {
+    iconCache[color] = color === 'blue'
+      ? new L.Icon.Default()
+      : new L.Icon({
+          iconUrl: `https://cdn.jsdelivr.net/gh/pointhi/leaflet-color-markers@master/img/marker-icon-2x-${color}.png`,
+          shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+          iconSize: [25, 41],
+          iconAnchor: [12, 41],
+          popupAnchor: [1, -34],
+          shadowSize: [41, 41],
+        });
+  }
+  return iconCache[color];
+}
 
 interface MapComponentProps {
-  routeCoordinates: [number, number][]; // Array of [lat, lng]
-  markers: { lat: number; lng: number; title: string; role?: 'origen' | 'destino' }[];
-  onMarkerDragEnd?: (role: 'origen' | 'destino', lat: number, lng: number) => void;
+  routes: MapRoute[];
+  markers: MapMarker[];
+  onMarkerDragEnd?: (legIndex: number, role: 'origen' | 'destino', lat: number, lng: number) => void;
   // Se incrementa solo cuando se debe reencuadrar el mapa (ej. al calcular una
   // ruta nueva), NO en cada arrastre de marcador - así el zoom/posición que el
   // usuario ajustó manualmente no se pierde al mover un pin.
   fitKey?: number;
 }
 
-// Componente para ajustar el zoom y centro automáticamente, solo cuando fitKey cambia
 function ChangeView({ bounds, fitKey }: { bounds: L.LatLngBoundsExpression; fitKey?: number }) {
   const map = useMap();
   useEffect(() => {
@@ -49,16 +55,15 @@ function ChangeView({ bounds, fitKey }: { bounds: L.LatLngBoundsExpression; fitK
   return null;
 }
 
-export default function MapComponent({ routeCoordinates, markers, onMarkerDragEnd, fitKey }: MapComponentProps) {
+export default function MapComponent({ routes, markers, onMarkerDragEnd, fitKey }: MapComponentProps) {
   // Centro por defecto: México
   const defaultCenter: [number, number] = [23.6345, -102.5528];
 
-  let bounds: L.LatLngBoundsExpression | null = null;
-  if (routeCoordinates.length > 0) {
-    bounds = L.latLngBounds(routeCoordinates);
-  } else if (markers.length > 0) {
-    bounds = L.latLngBounds(markers.map(m => [m.lat, m.lng]));
-  }
+  const allPoints: [number, number][] = [
+    ...routes.flatMap(r => r.coordinates),
+    ...markers.map(m => [m.lat, m.lng] as [number, number]),
+  ];
+  const bounds = allPoints.length > 0 ? L.latLngBounds(allPoints) : null;
 
   return (
     <div className="w-full h-[400px] rounded-xl overflow-hidden border shadow-inner z-0">
@@ -68,29 +73,29 @@ export default function MapComponent({ routeCoordinates, markers, onMarkerDragEn
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         {bounds && <ChangeView bounds={bounds} fitKey={fitKey} />}
-        
-        {routeCoordinates.length > 0 && (
-          <Polyline positions={routeCoordinates} color="#3b82f6" weight={6} opacity={0.8} />
-        )}
 
-        {markers.map((marker, idx) => (
+        {routes.map((route, idx) => (
+          <Polyline key={idx} positions={route.coordinates} color={route.color} weight={6} opacity={0.8} />
+        ))}
+
+        {markers.map((marker) => (
           <Marker
-            key={idx}
+            key={`${marker.legIndex}-${marker.role}`}
             position={[marker.lat, marker.lng]}
-            icon={marker.role === 'destino' ? destinoIcon : origenIcon}
-            draggable={!!onMarkerDragEnd && !!marker.role}
+            icon={getIcon(marker.color)}
+            draggable={!!onMarkerDragEnd}
             eventHandlers={
-              onMarkerDragEnd && marker.role
+              onMarkerDragEnd
                 ? {
                     dragend: (e) => {
                       const pos = (e.target as L.Marker).getLatLng();
-                      onMarkerDragEnd(marker.role as 'origen' | 'destino', pos.lat, pos.lng);
+                      onMarkerDragEnd(marker.legIndex, marker.role, pos.lat, pos.lng);
                     },
                   }
                 : undefined
             }
           >
-            <Popup>{marker.title}{marker.role ? ' (arrástrame para ajustar)' : ''}</Popup>
+            <Popup>{marker.title} (arrástrame para ajustar)</Popup>
           </Marker>
         ))}
       </MapContainer>

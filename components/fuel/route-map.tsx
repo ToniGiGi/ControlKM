@@ -8,18 +8,42 @@ const MapComponent = dynamic(() => import('./MapComponent'), {
   loading: () => <Skeleton className="w-full h-[400px] rounded-xl border z-0" />
 });
 
-type Marker = { lat: number; lng: number; title: string; role?: 'origen' | 'destino' };
+// El origen siempre es azul; cada destino toma el siguiente color.
+// `name` corresponde a los íconos de leaflet-color-markers; `hex` al trazo de la ruta.
+export const LEG_COLORS = [
+  { name: 'red', hex: '#CB2B3E' },
+  { name: 'green', hex: '#2AAD27' },
+  { name: 'orange', hex: '#CB8427' },
+  { name: 'violet', hex: '#9C2BCB' },
+  { name: 'gold', hex: '#C9A400' },
+  { name: 'black', hex: '#3D3D3D' },
+];
+
+export function legColor(index: number) {
+  return LEG_COLORS[index % LEG_COLORS.length];
+}
+
+export type MapMarker = {
+  lat: number;
+  lng: number;
+  title: string;
+  color: string;
+  legIndex: number;
+  role: 'origen' | 'destino';
+};
+
+export type MapRoute = { coordinates: [number, number][]; color: string };
 
 export function RouteMap({
-  routeCoordinates,
+  routes,
   markers,
   onMarkerDragEnd,
   fitKey,
 }: {
-  routeCoordinates: [number, number][];
-  markers: Marker[];
-  onMarkerDragEnd?: (role: 'origen' | 'destino', lat: number, lng: number) => void;
+  routes: MapRoute[];
+  markers: MapMarker[];
+  onMarkerDragEnd?: (legIndex: number, role: 'origen' | 'destino', lat: number, lng: number) => void;
   fitKey?: number;
 }) {
-  return <MapComponent routeCoordinates={routeCoordinates} markers={markers} onMarkerDragEnd={onMarkerDragEnd} fitKey={fitKey} />;
+  return <MapComponent routes={routes} markers={markers} onMarkerDragEnd={onMarkerDragEnd} fitKey={fitKey} />;
 }
