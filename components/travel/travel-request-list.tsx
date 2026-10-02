@@ -35,6 +35,8 @@ type TravelRequestListProps = {
 export function TravelRequestList({ initialRequests }: TravelRequestListProps) {
   const { role, config, can } = useRole()
   const isConductor = role === 'conductor'
+  // Cuentas por Pagar no puede dar visto bueno: solo ve lo que ya está listo para pagar o ya pagó.
+  const isCuentasPorPagar = role === 'cuentas_por_pagar'
 
   const [requests, setRequests] = useState(initialRequests)
   const [query, setQuery] = useState('')
@@ -109,6 +111,10 @@ export function TravelRequestList({ initialRequests }: TravelRequestListProps) {
         return false
       }
 
+      if (isCuentasPorPagar && r.estado !== 'APROBADA' && r.estado !== 'PAGADA') {
+        return false
+      }
+
       const q = query.toLowerCase()
       const matchQ =
         !q ||
@@ -125,7 +131,7 @@ export function TravelRequestList({ initialRequests }: TravelRequestListProps) {
 
       return matchQ && matchEstado && matchDesde && matchHasta
     })
-  }, [requests, query, estado, fechaDesde, fechaHasta, isConductor, config.empleadoId])
+  }, [requests, query, estado, fechaDesde, fechaHasta, isConductor, isCuentasPorPagar, config.empleadoId])
 
   const handleExportExcel = () => {
     exportRowsToExcel(
@@ -262,10 +268,10 @@ export function TravelRequestList({ initialRequests }: TravelRequestListProps) {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="todos">Todos</SelectItem>
-            <SelectItem value="pendiente">Pendientes</SelectItem>
+            {!isCuentasPorPagar && <SelectItem value="pendiente">Pendientes</SelectItem>}
             <SelectItem value="aprobada">Con visto bueno</SelectItem>
             <SelectItem value="pagada">Pagadas</SelectItem>
-            <SelectItem value="rechazada">Rechazadas</SelectItem>
+            {!isCuentasPorPagar && <SelectItem value="rechazada">Rechazadas</SelectItem>}
           </SelectContent>
         </Select>
 

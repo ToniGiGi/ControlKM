@@ -35,6 +35,8 @@ type FuelRequestListProps = {
 export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListProps) {
   const { role, config, can } = useRole()
   const isConductor = role === 'conductor'
+  // Cuentas por Pagar no puede dar visto bueno: solo ve lo que ya está listo para pagar o ya pagó.
+  const isCuentasPorPagar = role === 'cuentas_por_pagar'
 
   const [requests, setRequests] = useState(initialRequests)
   const [query, setQuery] = useState('')
@@ -109,6 +111,10 @@ export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListPr
 
       // Si es conductor, solo mostrar las de su vehículo
       if (isConductor && v?.empleadoId !== config.empleadoId) {
+        return false
+      }
+
+      if (isCuentasPorPagar && r.estado !== 'APROBADA' && r.estado !== 'PAGADA') {
         return false
       }
 
@@ -213,7 +219,7 @@ export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListPr
 
       <PageHeader
         title="Solicitudes de Combustible"
-        description={`${filtered.length} viáticos gestionados`}
+        description={`${filtered.length} solicitudes gestionadas`}
       >
         <div className="flex gap-2">
           <Button variant="outline" className="gap-2" onClick={handleExportExcel} disabled={filtered.length === 0}>
@@ -262,10 +268,10 @@ export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListPr
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="todos">Todos</SelectItem>
-            <SelectItem value="pendiente">Pendientes</SelectItem>
+            {!isCuentasPorPagar && <SelectItem value="pendiente">Pendientes</SelectItem>}
             <SelectItem value="aprobada">Con visto bueno</SelectItem>
             <SelectItem value="pagada">Pagadas</SelectItem>
-            <SelectItem value="rechazada">Rechazadas</SelectItem>
+            {!isCuentasPorPagar && <SelectItem value="rechazada">Rechazadas</SelectItem>}
           </SelectContent>
         </Select>
 
