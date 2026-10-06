@@ -3,6 +3,9 @@
 import { getPrisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import { hashPassword } from '@/lib/password'
+import { notifyRoleByWhatsApp } from '@/lib/whatsapp'
+
+const mxn = (n: number | null | undefined) => (n || 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })
 
 // Genera folios secuenciales (QRQ-C-0001, QRQ-V-0001, ...) usando un contador
 // persistente en OrganizationConfig, para que nunca se reutilicen números aunque
@@ -522,6 +525,9 @@ export async function createFuelRequest(data: any) {
     include: { vehiculo: true }
   })
 
+  await notifyRoleByWhatsApp('ADMINISTRADOR',
+    `⛽ *Nueva solicitud de combustible* ${req.folio}\nSolicitante: ${req.solicitanteNombre || 'Sin nombre'}\nVehículo: ${req.vehiculo?.nombreInterno || '-'}\nMotivo: ${req.motivo || '-'}\nMonto: ${mxn(req.costoTotal)}\n\nPendiente de visto bueno: https://controlkm.com/combustible`)
+
   revalidatePath('/combustible')
   return { success: true, folio: req.folio }
 }
@@ -546,6 +552,9 @@ export async function approveFuelRequest(id: string, firmaAprobadorUrl?: string)
     where: { id },
     data: { estado: 'APROBADA', ...(firmaAprobadorUrl ? { firmaAprobadorUrl } : {}) }
   })
+
+  await notifyRoleByWhatsApp('CUENTAS_POR_PAGAR',
+    `✅ *Solicitud de combustible aprobada* ${req.folio}\nSolicitante: ${req.solicitanteNombre || 'Sin nombre'}\nMotivo: ${req.motivo || '-'}\nMonto a pagar: ${mxn(req.costoTotal)}\n\nLista para pago: https://controlkm.com/combustible`)
 
   revalidatePath('/combustible')
   revalidatePath('/vehiculos')
@@ -592,6 +601,9 @@ export async function createTravelRequest(data: any) {
   const folio = await getNextFolio(prisma, 'lastTravelFolio', 'QRQ-V')
   const req = await prisma.travelRequest.create({ data: { ...data, folio } })
 
+  await notifyRoleByWhatsApp('ADMINISTRADOR',
+    `🧳 *Nueva solicitud de viáticos* ${req.folio}\nSolicitante: ${req.solicitanteNombre || 'Sin nombre'}\nMonto: ${mxn(req.costoTotal)}\n\nPendiente de visto bueno: https://controlkm.com/viaticos`)
+
   revalidatePath('/viaticos')
   return req
 }
@@ -609,6 +621,9 @@ export async function approveTravelRequest(id: string, firmaAprobadorUrl?: strin
     where: { id },
     data: { estado: 'APROBADA', ...(firmaAprobadorUrl ? { firmaAprobadorUrl } : {}) }
   })
+
+  await notifyRoleByWhatsApp('CUENTAS_POR_PAGAR',
+    `✅ *Solicitud de viáticos aprobada* ${req.folio}\nSolicitante: ${req.solicitanteNombre || 'Sin nombre'}\nMonto a pagar: ${mxn(req.costoTotal)}\n\nLista para pago: https://controlkm.com/viaticos`)
 
   revalidatePath('/viaticos')
   return req
