@@ -66,8 +66,32 @@ export default async function LoginPage({
       </div>
 
       {/* ─── RIGHT PANEL: Login form ─── */}
-      <div className="relative z-10 flex w-full flex-col items-center justify-center bg-[#F7F8FA] px-6 sm:px-10 lg:w-[50%] lg:-ml-[5%]">
-        <div className="w-full max-w-[400px] rounded-2xl border border-slate-200/80 bg-white px-8 py-10 shadow-[0_4px_24px_rgba(0,0,0,0.04)]">
+      <div className="relative z-10 flex w-full flex-col items-center justify-center overflow-hidden bg-[#0A1A2F] px-5 py-10 sm:px-10 lg:overflow-visible lg:bg-[#F7F8FA] lg:py-0 lg:w-[50%] lg:-ml-[5%]">
+
+        {/* Fondo solo en celular/tablet: en escritorio la imagen vive en el panel izquierdo */}
+        <div className="absolute inset-0 lg:hidden">
+          <Image
+            src="/vehiculos-login.png"
+            alt=""
+            fill
+            sizes="100vw"
+            className="object-cover object-center"
+            priority
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-[#0A1A2F]/85 via-[#0A1A2F]/60 to-[#0A1A2F]/90" />
+        </div>
+
+        <div className="relative mb-7 w-full max-w-[400px] text-center lg:hidden">
+          <h1 className="text-[1.7rem] font-bold leading-tight tracking-tight text-white drop-shadow-lg">
+            Tu flotilla,{' '}
+            <span className="text-blue-400">siempre en movimiento.</span>
+          </h1>
+          <p className="mt-2 text-sm text-slate-300/90 drop-shadow">
+            Seguimiento y administración en tiempo real.
+          </p>
+        </div>
+
+        <div className="relative w-full max-w-[400px] rounded-2xl border border-white/30 bg-white/95 px-6 py-8 shadow-2xl backdrop-blur-md sm:px-8 sm:py-10 lg:border-slate-200/80 lg:bg-white lg:shadow-[0_4px_24px_rgba(0,0,0,0.04)] lg:backdrop-blur-none">
 
           {/* Logo Qrubyx */}
           <div className="mb-8 flex flex-col items-center">
@@ -95,6 +119,11 @@ export default async function LoginPage({
           <p className="mt-8 text-center text-[11px] text-slate-400">
             © 2026 Qrubyx. Todos los derechos reservados.
           </p>
+        </div>
+
+        <div className="relative mt-6 flex items-center gap-2 text-xs text-slate-300/80 lg:hidden">
+          <ShieldCheck className="size-3.5" />
+          <span>Tu flotilla. Tu negocio. Nuestro compromiso.</span>
         </div>
       </div>
     </div>

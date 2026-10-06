@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { usePathname } from 'next/navigation'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { AppSidebar } from '@/components/app-sidebar'
 import { Topbar } from '@/components/topbar'
@@ -8,6 +9,12 @@ import { Topbar } from '@/components/topbar'
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false)
   const [isCollapsed, setIsCollapsed] = useState(false)
+  const pathname = usePathname()
+
+  // En celular el menú se cierra solo al navegar a otra página.
+  useEffect(() => {
+    setOpen(false)
+  }, [pathname])
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -18,7 +25,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* Sidebar móvil */}
       <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent side="left" className="w-[240px] p-0">
+        <SheetContent
+          side="left"
+          className="data-[side=left]:w-[240px] gap-0 border-r-0 p-0 [&_[data-slot=sheet-close]]:text-white [&_[data-slot=sheet-close]]:hover:bg-white/10"
+        >
           <SheetTitle className="sr-only">Menú de navegación</SheetTitle>
           <AppSidebar isCollapsed={false} />
         </SheetContent>
