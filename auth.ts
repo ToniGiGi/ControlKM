@@ -18,7 +18,8 @@ export const { auth, signIn, signOut, handlers } = NextAuth({
 
         const prisma = getPrisma()
         const user = await prisma.user.findUnique({
-          where: { email: (credentials.email as string).trim() },
+          // Los teclados de celular ponen mayúscula inicial; los correos se guardan en minúsculas.
+          where: { email: (credentials.email as string).trim().toLowerCase() },
           include: { employee: true }
         })
 

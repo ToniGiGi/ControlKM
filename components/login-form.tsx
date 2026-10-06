@@ -89,6 +89,10 @@ export function LoginForm({ initialError }: { initialError?: string }) {
             onChange={(e) => setEmail(e.target.value)}
             placeholder="Correo electrónico"
             required
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            autoComplete="username"
             className="pl-10 bg-white border-slate-200 focus-visible:ring-blue-500 h-11 rounded-lg"
           />
         </div>
@@ -104,6 +108,10 @@ export function LoginForm({ initialError }: { initialError?: string }) {
             type={showPassword ? "text" : "password"}
             placeholder="Contraseña"
             required
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            autoComplete="current-password"
             className="pl-10 pr-10 bg-white border-slate-200 focus-visible:ring-blue-500 h-11 rounded-lg"
           />
           <button
