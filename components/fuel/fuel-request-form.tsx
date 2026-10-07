@@ -115,7 +115,7 @@ export function FuelRequestForm({ vehicles, departments, defaultDepartamentoId }
   
   // Ruta y Calculadora
   const [routeLegs, setRouteLegs] = useState<RouteLeg[]>([{ origen: '', destino: '', tipo: 'sencillo', km: '' }])
-  const [holgura, setHolgura] = useState<number>(100)
+  const [holgura, setHolgura] = useState<number>(15)
   const [rendimiento, setRendimiento] = useState<number>(10)
   const [tipoGasolina, setTipoGasolina] = useState<keyof typeof GAS_PRICES>('VERDE')
 

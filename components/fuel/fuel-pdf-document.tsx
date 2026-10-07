@@ -13,6 +13,7 @@ export function FuelPdfDocument({ data, onClose }: FuelPdfDocumentProps) {
   
   // Formatters
   const formatDate = (d: any) => d ? new Intl.DateTimeFormat('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(d)) : ''
+  const formatTime = (d: any) => d ? new Intl.DateTimeFormat('es-MX', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/Mexico_City' }).format(new Date(d)) : ''
   const formatLongDate = (d: any) => d ? new Intl.DateTimeFormat('es-MX', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(d)) : ''
   const formatMoney = (val: number) => `$ ${Number(val || 0).toFixed(2)}`
   const formatNumber = (val: number) => Number(val || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -106,6 +107,10 @@ export function FuelPdfDocument({ data, onClose }: FuelPdfDocumentProps) {
               <td className="border border-black py-1 px-2 w-[45%] uppercase">{data.solicitanteNombre}</td>
               <td className="border border-black bg-gray-100 font-bold py-1 px-2 w-[20%]">Fecha de solicitud:</td>
               <td className="border border-black py-1 px-2 w-[15%] text-center">{formatDate(data.fechaSolicitud)}</td>
+            </tr>
+            <tr>
+              <td className="border border-black bg-gray-100 font-bold py-1 px-2">Hora de elaboración:</td>
+              <td className="border border-black py-1 px-2" colSpan={3}>{formatTime(data.createdAt) || "N/A"}</td>
             </tr>
             <tr>
               <td className="border border-black bg-gray-100 font-bold py-1 px-2">Departamento:</td>

@@ -141,6 +141,7 @@ export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListPr
       [
         { header: 'Folio', value: (r) => r.folio || '', width: 14 },
         { header: 'Fecha', value: (r) => r.fechaSolicitud ? new Date(r.fechaSolicitud) : '', width: 12, format: 'dd/mm/yyyy' },
+        { header: 'Hora', value: (r) => formatTime(r.createdAt), width: 12 },
         { header: 'Solicitante', value: (r) => r.solicitanteNombre || '', width: 22 },
         { header: 'Vehículo', value: (r) => r.vehiculo?.nombreInterno || '', width: 20 },
         { header: 'Placas', value: (r) => r.vehiculo?.placas || '', width: 12 },
@@ -155,6 +156,7 @@ export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListPr
         { header: 'Costo Total', value: (r) => r.costoTotal ?? 0, width: 14, format: '$#,##0.00' },
         { header: 'Estado', value: (r) => r.estado || '', width: 12 },
         { header: 'Fecha de Pago', value: (r) => r.fechaPago ? new Date(r.fechaPago) : '', width: 12, format: 'dd/mm/yyyy' },
+        { header: 'Hora', value: (r) => formatTime(r.createdAt), width: 12 },
         { header: 'Observaciones de Rechazo', value: (r) => r.observacionesRechazo || '', width: 30 },
       ],
       'Combustible',
@@ -176,6 +178,9 @@ export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListPr
       currency: 'MXN',
     }).format(val || 0)
   }
+
+  // La hora sale de createdAt: el campo de fecha puede venir sin hora.
+  const formatTime = (d: any) => d ? new Intl.DateTimeFormat('es-MX', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/Mexico_City' }).format(new Date(d)) : ''
 
   const formatDate = (dateInput: any) => {
     if (!dateInput) return 'Sin fecha'
@@ -333,7 +338,7 @@ export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListPr
                         <CardTitle className="text-base font-semibold">
                           {r.vehiculo?.nombreInterno || 'Vehículo Desconocido'}
                         </CardTitle>
-                        <p className="text-xs text-muted-foreground">{r.solicitanteNombre || 'Sin nombre'} • {formatDate(r.fechaSolicitud)}</p>
+                        <p className="text-xs text-muted-foreground">{r.solicitanteNombre || 'Sin nombre'} • {formatDate(r.fechaSolicitud)}{r.createdAt ? ` · ${formatTime(r.createdAt)}` : ""}</p>
                       </div>
                     </div>
                   </div>
@@ -493,7 +498,7 @@ export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListPr
                       <TableCell>
                         <div className="flex flex-col text-sm">
                           <span className="font-medium">{r.solicitanteNombre || 'Sin nombre'}</span>
-                          <span className="text-xs text-muted-foreground">{formatDate(r.fechaSolicitud)}</span>
+                          <span className="text-xs text-muted-foreground">{formatDate(r.fechaSolicitud)}{r.createdAt ? ` · ${formatTime(r.createdAt)}` : ""}</span>
                         </div>
                       </TableCell>
                       <TableCell>
