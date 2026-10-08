@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Car, ImagePlus, Activity, MapPin, Hash, Palette, Fuel, PenTool, Loader2, Trash2 } from 'lucide-react'
+import { Car, ImagePlus, Activity, MapPin, Hash, Palette, Fuel, PenTool, Loader2, Trash2, CreditCard, Tag } from 'lucide-react'
 import { toast } from 'sonner'
 import { type Vehicle, type VehicleStatus } from '@/lib/mock-data'
 import { uploadImage } from '@/app/actions/upload'
@@ -19,7 +19,13 @@ type VehicleFormModalProps = {
   sucursales: any[]
 }
 
-const tiposUnidad = ['Sedán', 'Camioneta', 'Tráiler', 'Moto', 'Caja Seca', 'Refrigerado']
+// Formato XXXX XXXX XXXX XXXX (16 dígitos), igual que en la solicitud de combustible.
+function formatToka(value: string) {
+  const digits = value.replace(/\D/g, '').slice(0, 16)
+  return digits.match(/.{1,4}/g)?.join(' ') || digits
+}
+
+const tiposUnidad =['Sedán', 'Camioneta', 'Tráiler', 'Moto', 'Caja Seca', 'Refrigerado']
 const combustibles = [
   { value: 'VERDE', label: 'Gasolina Verde - Magna' },
   { value: 'ROJA', label: 'Gasolina Roja - Premium' },
@@ -230,6 +236,40 @@ export function VehicleFormModal({ isOpen, onClose, onSave, vehicle, sucursales 
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="space-y-1.5 md:col-span-2">
+              <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5"><CreditCard className="size-3.5" /> Tarjeta TOKA</label>
+              <Input
+                value={formData.tarjetaToka || ''}
+                onChange={(e) => handleChange('tarjetaToka', formatToka(e.target.value))}
+                placeholder="XXXX XXXX XXXX XXXX"
+                inputMode="numeric"
+                maxLength={19}
+              />
+            </div>
+
+            <div className="space-y-2 md:col-span-2">
+              <label className="flex w-fit cursor-pointer items-center gap-2 text-sm font-medium">
+                <input
+                  type="checkbox"
+                  className="size-4 accent-primary"
+                  checked={!!formData.tieneTag}
+                  onChange={(e) => handleChange('tieneTag', e.target.checked)}
+                />
+                ¿Este vehículo cuenta con TAG?
+              </label>
+              {formData.tieneTag && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5"><Tag className="size-3.5" /> Número de TAG</label>
+                  <Input
+                    required
+                    value={formData.numeroTag || ''}
+                    onChange={(e) => handleChange('numeroTag', e.target.value.toUpperCase())}
+                    placeholder="Ej. IMDM31005090"
+                  />
+                </div>
+              )}
             </div>
 
             {isEditing && (

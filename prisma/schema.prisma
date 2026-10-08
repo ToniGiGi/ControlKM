@@ -68,6 +68,9 @@ model Vehicle {
   kmInicial                 Int           @default(0)
   kmActual                  Int           @default(0)
   rendimiento               Float?        @default(10.0)
+  tarjetaToka               String?       // tarjeta de gasolina; se precarga en las solicitudes de combustible
+  tieneTag                  Boolean       @default(false)
+  numeroTag                 String?
   estado                    String        @default("ACTIVO")
   fechaAsignacion           DateTime?
   sucursal                  String?       // deprecated: usar sucursalId. Se mantiene por compatibilidad histórica.
@@ -234,6 +237,7 @@ model FuelRequest {
   
   // Rutas
   rutas             String
+  rutasDetalle      String? // JSON con los tramos (origen, destino, tipo, km) para poder editar la solicitud
   kmAproximado      Float
   kmHolgura         Float
   rendimiento       Float         @default(10.0) // km/l
@@ -259,6 +263,7 @@ model FuelRequest {
   departamentoRef   Department? @relation(fields: [departamentoId], references: [id], onDelete: SetNull)
 
   observacionesRechazo String?
+  modificadaPorAdmin   Boolean @default(false)
 
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt

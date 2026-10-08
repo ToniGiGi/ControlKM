@@ -26,7 +26,7 @@ export default async function NuevaSolicitudCombustiblePage() {
           </Button>
         </Link>
         <PageHeader
-          title="Nueva Solicitud de Viáticos"
+          title="Nueva Solicitud de Combustible"
           description="Calculadora inteligente de combustible y peajes."
         />
       </div>

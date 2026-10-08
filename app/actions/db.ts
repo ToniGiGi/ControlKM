@@ -1,6 +1,7 @@
 'use server'
 
 import { getPrisma } from '@/lib/prisma'
+import { auth } from '@/auth'
 import { revalidatePath } from 'next/cache'
 import { hashPassword } from '@/lib/password'
 import { notifyRoleByWhatsApp } from '@/lib/whatsapp'
@@ -200,7 +201,8 @@ function cleanVehicleData(data: any) {
     'nombreInterno', 'marca', 'modelo', 'anio', 'tipoUnidad', 'placas',
     'vin', 'numeroEconomico', 'color', 'combustible', 'capacidadTanque', 'rendimiento',
     'kmInicial', 'kmActual', 'estado', 'fechaAsignacion', 'sucursalId',
-    'proximoMantenimientoFecha', 'proximoMantenimientoKm', 'empleadoId', 'fotoUrl'
+    'proximoMantenimientoFecha', 'proximoMantenimientoKm', 'empleadoId', 'fotoUrl',
+    'tarjetaToka', 'tieneTag', 'numeroTag'
   ];
   
   const clean: any = {};
@@ -241,6 +243,9 @@ function cleanVehicleData(data: any) {
 
   if (clean.vin === '') clean.vin = null;
   if (clean.numeroEconomico === '') clean.numeroEconomico = null;
+  if (clean.tarjetaToka === '') clean.tarjetaToka = null;
+  if (clean.tieneTag !== undefined) clean.tieneTag = !!clean.tieneTag;
+  if (clean.tieneTag === false || clean.numeroTag === '') clean.numeroTag = null;
   if (clean.color === '') clean.color = null;
   if (clean.combustible === '') clean.combustible = null;
   if (!clean.sucursalId || clean.sucursalId === 'unassigned') clean.sucursalId = null;
@@ -530,6 +535,47 @@ export async function createFuelRequest(data: any) {
 
   revalidatePath('/combustible')
   return { success: true, folio: req.folio }
+}
+
+export async function getFuelRequest(id: string) {
+  const prisma = getPrisma()
+  return prisma.fuelRequest.findUnique({
+    where: { id },
+    include: { vehiculo: { select: { id: true, empleadoId: true } } },
+  })
+}
+
+// Solo solicitudes PENDIENTES: el conductor corrige las suyas y el administrador
+// puede ajustarlas antes de dar el visto bueno (queda marcada como modificada).
+export async function editFuelRequest(id: string, data: any) {
+  const session = await auth()
+  const role = String((session?.user as any)?.role || '').toUpperCase()
+  const employeeId = (session?.user as any)?.employeeId
+  const isAdmin = role === 'SUPER_ADMIN' || role === 'ADMINISTRADOR'
+
+  const prisma = getPrisma()
+  const current = await prisma.fuelRequest.findUnique({
+    where: { id },
+    include: { vehiculo: { select: { empleadoId: true } } },
+  })
+  if (!current) throw new Error('Solicitud no encontrada')
+  if (current.estado !== 'PENDIENTE') throw new Error('Solo se pueden editar solicitudes pendientes')
+  if (!isAdmin && (role !== 'CONDUCTOR' || !employeeId || current.vehiculo?.empleadoId !== employeeId)) {
+    throw new Error('No tienes permiso para editar esta solicitud')
+  }
+
+  const {
+    vehiculoId, estado, folio, firmaSolicitanteUrl, firmaAprobadorUrl, firmaPagoUrl,
+    fechaPago, modificadaPorAdmin, observacionesRechazo, ...rest
+  } = cleanFuelRequestData(data)
+
+  await prisma.fuelRequest.update({
+    where: { id },
+    data: { ...rest, vehiculoId, ...(isAdmin ? { modificadaPorAdmin: true } : {}) },
+  })
+
+  revalidatePath('/combustible')
+  return { success: true }
 }
 
 export async function updateFuelRequest(id: string, data: any) {
@@ -922,8 +968,10 @@ export async function getAlerts(empleadoId?: string, role?: string) {
       generatedAlerts.push({
         id: `combustible-aprobada-${req.id}`,
         vehiculoId: req.vehiculoId,
-        tipo: 'Solicitud Aprobada',
-        mensaje: `Tu solicitud de combustible para ${vehiculoNombre} fue aprobada y está pendiente de pago`,
+        tipo: req.modificadaPorAdmin ? 'Aprobada con modificaciones' : 'Solicitud Aprobada',
+        mensaje: req.modificadaPorAdmin
+          ? `Tu solicitud de combustible para ${vehiculoNombre} fue aceptada pero con modificaciones del administrador. Revísala; está pendiente de pago`
+          : `Tu solicitud de combustible para ${vehiculoNombre} fue aprobada y está pendiente de pago`,
         severidad: 'media',
         href: '/combustible',
         fecha: req.updatedAt

@@ -73,6 +73,9 @@ export interface Vehicle {
   combustible: string
   capacidadTanque: number
   rendimiento?: number
+  tarjetaToka?: string | null
+  tieneTag?: boolean
+  numeroTag?: string | null
   kmInicial: number
   kmActual: number
   estado: VehicleStatus

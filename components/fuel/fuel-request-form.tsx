@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { X, Map, Fuel, Calculator, Banknote, CreditCard, Tag, Navigation } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card, CardContent } from '@/components/ui/card'
-import { createFuelRequest } from '@/app/actions/db'
+import { createFuelRequest, editFuelRequest, approveFuelRequest } from '@/app/actions/db'
 import { useRole } from '@/components/role-provider'
 import { RouteMap, legColor, type MapMarker, type MapRoute } from './route-map'
 import { SignatureModal } from '@/components/shared/signature-modal'
@@ -34,47 +34,70 @@ type FuelRequestFormProps = {
   vehicles: any[]
   departments: any[]
   defaultDepartamentoId?: string
+  // Si viene, el formulario edita esta solicitud (solo PENDIENTES) en vez de crear una nueva.
+  initialRequest?: any
 }
 
-export function FuelRequestForm({ vehicles, departments, defaultDepartamentoId }: FuelRequestFormProps) {
-  const router = useRouter()
-  const { role, config } = useRole()
+const DEFAULT_HOLGURA = 15
 
-  const selectableVehicles = role === 'conductor'
+// Las solicitudes nuevas guardan los tramos en rutasDetalle; las anteriores solo tienen
+// el texto "Origen - Destino (tipo) | ...", sin km por tramo.
+function legsFromRequest(req: any): RouteLeg[] {
+  if (req.rutasDetalle) {
+    try {
+      const legs = JSON.parse(req.rutasDetalle)
+      if (Array.isArray(legs) && legs.length > 0) return legs.map((l: any) => ({ origen: l.origen || '', destino: l.destino || '', tipo: l.tipo === 'redondo' ? 'redondo' : 'sencillo', km: typeof l.km === 'number' ? l.km : '' }))
+    } catch {}
+  }
+  const parts: string[] = (req.rutas || '').split(' | ').filter(Boolean)
+  const legs: RouteLeg[] = parts.map(p => {
+    const m = p.match(/^(.*?) - (.*) \((sencillo|redondo)\)$/)
+    return m
+      ? { origen: m[1], destino: m[2], tipo: m[3] as 'sencillo' | 'redondo', km: '' as const }
+      : { origen: p, destino: '', tipo: 'sencillo' as const, km: '' as const }
+  })
+  if (legs.length === 1 && req.kmAproximado) {
+    legs[0].km = Math.round(req.kmAproximado / (legs[0].tipo === 'redondo' ? 2 : 1))
+  }
+  return legs.length > 0 ? legs : [{ origen: '', destino: '', tipo: 'sencillo', km: '' }]
+}
+
+export function FuelRequestForm({ vehicles, departments, defaultDepartamentoId, initialRequest }: FuelRequestFormProps) {
+  const router = useRouter()
+  const { role, config, can } = useRole()
+  const isEdit = !!initialRequest
+  const isConductor = role === 'conductor'
+  const canApprove = can('aprobar_solicitudes')
+
+  const selectableVehicles = isConductor
     ? vehicles.filter(v => v.empleadoId === config.empleadoId)
     : vehicles
 
   // Datos Generales
-  const [solicitanteNombre, setSolicitanteNombre] = useState(role === 'conductor' ? config.nombre : '')
-  const [departamentoId, setDepartamentoId] = useState(defaultDepartamentoId || '')
-  const [area, setArea] = useState('')
-  const [vehiculoId, setVehiculoId] = useState(selectableVehicles.length === 1 ? selectableVehicles[0].id : '')
-  const [motivo, setMotivo] = useState('')
-  const [tarjetaToka, setTarjetaToka] = useState('')
-  const [numeroTag, setNumeroTag] = useState('')
+  const [solicitanteNombre, setSolicitanteNombre] = useState(initialRequest?.solicitanteNombre ?? (isConductor ? config.nombre : ''))
+  const [departamentoId, setDepartamentoId] = useState(initialRequest?.departamentoId ?? defaultDepartamentoId ?? '')
+  const [area, setArea] = useState(initialRequest?.area ?? '')
+  const [vehiculoId, setVehiculoId] = useState(initialRequest?.vehiculoId ?? (selectableVehicles.length === 1 ? selectableVehicles[0].id : ''))
+  const [motivo, setMotivo] = useState(initialRequest?.motivo ?? '')
+  const [tarjetaToka, setTarjetaToka] = useState(initialRequest?.tarjetaToka ?? '')
+  const [numeroTag, setNumeroTag] = useState(initialRequest?.numeroTag ?? '')
+
+  // Al editar, el vehículo ya guardado no debe pisar TOKA/TAG/gasolina/rendimiento con valores por defecto.
+  const lastAutofilledVehicle = useRef<string | undefined>(initialRequest?.vehiculoId)
 
   // Auto-llenado de TOKA, TAG y Combustible según vehículo seleccionado
   useEffect(() => {
     if (!vehiculoId) return
+    if (vehiculoId === lastAutofilledVehicle.current) return
+    lastAutofilledVehicle.current = vehiculoId
     const selectedVehicle = vehicles.find(v => v.id === vehiculoId)
     if (!selectedVehicle) return
 
     const name = [selectedVehicle.nombreInterno, selectedVehicle.marca, selectedVehicle.modelo, selectedVehicle.alias].join(' ').toLowerCase()
     
-    // Auto-llenado de TOKA / TAG
-    if (name.includes('sunray')) {
-      setTarjetaToka('5064 2983 7195 5362')
-      setNumeroTag('IMDM31005090')
-    } else if (name.includes('ducato')) {
-      setTarjetaToka('5064 2983 9047 6457')
-      setNumeroTag('IMDM296348204')
-    } else if (name.includes('march')) {
-      setTarjetaToka('5064 2983 8809 0195')
-      setNumeroTag('')
-    } else {
-      setTarjetaToka('')
-      setNumeroTag('')
-    }
+    // TOKA y TAG se capturan en el vehículo; aquí solo se precargan y el conductor puede cambiarlos.
+    setTarjetaToka(selectedVehicle.tarjetaToka || '')
+    setNumeroTag(selectedVehicle.tieneTag ? (selectedVehicle.numeroTag || '') : '')
 
     // Auto-llenado del Tipo de Gasolina y Rendimiento
     let perf = 10;
@@ -114,18 +137,25 @@ export function FuelRequestForm({ vehicles, departments, defaultDepartamentoId }
   }, [vehiculoId, vehicles])
   
   // Ruta y Calculadora
-  const [routeLegs, setRouteLegs] = useState<RouteLeg[]>([{ origen: '', destino: '', tipo: 'sencillo', km: '' }])
-  const [holgura, setHolgura] = useState<number>(15)
-  const [rendimiento, setRendimiento] = useState<number>(10)
-  const [tipoGasolina, setTipoGasolina] = useState<keyof typeof GAS_PRICES>('VERDE')
+  const [routeLegs, setRouteLegs] = useState<RouteLeg[]>(() =>
+    initialRequest ? legsFromRequest(initialRequest) : [{ origen: '', destino: '', tipo: 'sencillo', km: '' }]
+  )
+  // kmHolgura guarda el total (km base + holgura), así que la holgura es la diferencia.
+  const [holgura, setHolgura] = useState<number>(() =>
+    initialRequest ? Math.max(0, Math.round((initialRequest.kmHolgura || 0) - (initialRequest.kmAproximado || 0))) : DEFAULT_HOLGURA
+  )
+  const [rendimiento, setRendimiento] = useState<number>(initialRequest?.rendimiento ?? 10)
+  const [tipoGasolina, setTipoGasolina] = useState<keyof typeof GAS_PRICES>(
+    initialRequest?.tipoGasolina && initialRequest.tipoGasolina in GAS_PRICES ? initialRequest.tipoGasolina : 'VERDE'
+  )
 
   // Mapa
   const [isCalculatingRoute, setIsCalculatingRoute] = useState(false)
   const [mapFitKey, setMapFitKey] = useState(0)
   
   // Extras
-  const [numCasetas, setNumCasetas] = useState<number | ''>('')
-  const [costoCasetas, setCostoCasetas] = useState<number | ''>('')
+  const [numCasetas, setNumCasetas] = useState<number | ''>(initialRequest?.numCasetas || '')
+  const [costoCasetas, setCostoCasetas] = useState<number | ''>(initialRequest?.costoCasetas || '')
 
   // Totales Auto-calculados
   const [kmTotal, setKmTotal] = useState(0)
@@ -337,48 +367,65 @@ export function FuelRequestForm({ vehicles, departments, defaultDepartamentoId }
   }, [routeLegs, holgura, rendimiento, tipoGasolina, costoCasetas])
 
   const [showSignatureModal, setShowSignatureModal] = useState(false)
+  // Al editar, el administrador puede solo guardar o guardar y dar el visto bueno en un paso.
+  const submitIntent = useRef<'save' | 'approve'>('save')
 
-  // El submit del <form> solo dispara la validación nativa (campos required) y,
-  // si pasa, abre el modal de firma. La creación real ocurre al confirmar la firma.
+  const buildPayload = () => ({
+    vehiculoId,
+    solicitanteNombre,
+    departamentoId,
+    area,
+    motivo,
+    tarjetaToka,
+    numeroTag,
+    rutas: routeLegs.map(l => `${l.origen || '?'} - ${l.destino || '?'} (${l.tipo})`).join(' | '),
+    rutasDetalle: JSON.stringify(routeLegs.map(({ origen, destino, tipo, km }) => ({ origen, destino, tipo, km }))),
+    kmAproximado: routeLegs.reduce((acc, leg) => acc + ((typeof leg.km === 'number' ? leg.km : 0) * (leg.tipo === 'redondo' ? 2 : 1)), 0),
+    kmHolgura: kmTotal,
+    rendimiento,
+    tipoGasolina,
+    precioGasolina: GAS_PRICES[tipoGasolina],
+    litrosSolicitados: litros,
+    costoGasolina: costoGas,
+    numCasetas: numCasetas || 0,
+    costoCasetas: costoCasetas || 0,
+    costoComidas: 0,
+    costoTotal: granTotal,
+  })
+
+  const saveEdit = async (firmaAprobadorUrl?: string) => {
+    setIsSubmitting(true)
+    try {
+      await editFuelRequest(initialRequest.id, buildPayload())
+      if (firmaAprobadorUrl) await approveFuelRequest(initialRequest.id, firmaAprobadorUrl)
+      router.push('/combustible')
+      router.refresh()
+    } catch (err) {
+      console.error(err)
+      alert('Error al guardar los cambios de la solicitud')
+      setIsSubmitting(false)
+    }
+  }
+
+  // El submit del <form> solo dispara la validación nativa (campos required). Crear o
+  // aprobar pide firma; guardar cambios de una solicitud existente no.
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    if (isEdit && submitIntent.current === 'save') {
+      saveEdit()
+      return
+    }
     setShowSignatureModal(true)
   }
 
-  const handleConfirmSignature = async (firmaSolicitanteUrl: string) => {
+  const handleConfirmSignature = async (firmaUrl: string) => {
+    if (isEdit) {
+      await saveEdit(firmaUrl)
+      return
+    }
     setIsSubmitting(true)
-
-    // Construir string de rutas para la BD
-    const rutasString = routeLegs
-      .map(l => `${l.origen || '?'} - ${l.destino || '?'} (${l.tipo})`)
-      .join(' | ')
-
-    const kmBaseAprox = routeLegs.reduce((acc, leg) => acc + ((typeof leg.km === 'number' ? leg.km : 0) * (leg.tipo === 'redondo' ? 2 : 1)), 0)
-
     try {
-      await createFuelRequest({
-        vehiculoId,
-        solicitanteNombre,
-        departamentoId,
-        area,
-        motivo,
-        tarjetaToka,
-        numeroTag,
-        rutas: rutasString,
-        kmAproximado: kmBaseAprox,
-        kmHolgura: kmTotal,
-        rendimiento,
-        tipoGasolina,
-        precioGasolina: GAS_PRICES[tipoGasolina],
-        litrosSolicitados: litros,
-        costoGasolina: costoGas,
-        numCasetas: numCasetas || 0,
-        costoCasetas: costoCasetas || 0,
-        costoComidas: 0,
-        costoTotal: granTotal,
-        estado: 'PENDIENTE',
-        firmaSolicitanteUrl,
-      })
+      await createFuelRequest({ ...buildPayload(), estado: 'PENDIENTE', firmaSolicitanteUrl: firmaUrl })
 
       router.push('/combustible')
       router.refresh()
@@ -476,14 +523,13 @@ export function FuelRequestForm({ vehicles, departments, defaultDepartamentoId }
               {/* Fila 4 */}
               {(() => {
                 const selected = vehicles.find(v => v.id === vehiculoId)
-                const name = (selected?.nombreInterno || '').toLowerCase()
-                const showTag = name.includes('sunray') || name.includes('ducato')
-                
+                const showTag = !!selected?.tieneTag || !!numeroTag
+
                 if (showTag) {
                   return (
                     <div className="space-y-2">
                       <Label className="flex items-center gap-1.5"><Tag className="size-4 text-muted-foreground"/> Número de TAG</Label>
-                      <Input placeholder="ID del TAG" value={numeroTag} readOnly className="bg-muted/50" />
+                      <Input placeholder="ID del TAG" value={numeroTag} onChange={e => setNumeroTag(e.target.value.toUpperCase())} />
                     </div>
                   )
                 }
@@ -579,8 +625,19 @@ export function FuelRequestForm({ vehicles, departments, defaultDepartamentoId }
             
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4">
               <div className="flex flex-col justify-end gap-2">
-                <Label>Holgura extra total (Km) (Opcional)</Label>
-                <Input type="number" value={holgura} onChange={e => setHolgura(Number(e.target.value))} />
+                <Label className="flex items-center gap-2">
+                  Holgura extra total (Km)
+                  <span className="text-xs text-muted-foreground font-normal">
+                    {isConductor ? '(Lo que el administrador permita)' : '(Opcional)'}
+                  </span>
+                </Label>
+                <Input
+                  type="number"
+                  value={holgura}
+                  onChange={e => setHolgura(Number(e.target.value))}
+                  readOnly={isConductor}
+                  className={isConductor ? 'bg-muted/50 cursor-not-allowed' : undefined}
+                />
               </div>
               <div className="flex flex-col justify-end gap-2">
                 <Label className="flex items-center gap-1.5">Rendimiento (Km/L) <span className="text-[10px] text-muted-foreground font-normal">(Auto)</span></Label>
@@ -647,9 +704,33 @@ export function FuelRequestForm({ vehicles, departments, defaultDepartamentoId }
 
           <div className="pt-6 flex justify-end gap-4 border-t">
             <Button type="button" variant="outline" onClick={() => router.push('/combustible')} disabled={isSubmitting}>Cancelar</Button>
-            <Button type="submit" disabled={isSubmitting} className="min-w-[200px] text-base h-11">
-              {isSubmitting ? 'Guardando...' : 'Firmar y Generar Solicitud'}
-            </Button>
+            {isEdit ? (
+              <>
+                <Button
+                  type="submit"
+                  variant={canApprove ? 'outline' : 'default'}
+                  disabled={isSubmitting}
+                  className="min-w-[160px] text-base h-11"
+                  onClick={() => { submitIntent.current = 'save' }}
+                >
+                  {isSubmitting ? 'Guardando...' : 'Guardar cambios'}
+                </Button>
+                {canApprove && (
+                  <Button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="min-w-[200px] text-base h-11"
+                    onClick={() => { submitIntent.current = 'approve' }}
+                  >
+                    Guardar y dar visto bueno
+                  </Button>
+                )}
+              </>
+            ) : (
+              <Button type="submit" disabled={isSubmitting} className="min-w-[200px] text-base h-11">
+                {isSubmitting ? 'Guardando...' : 'Firmar y Generar Solicitud'}
+              </Button>
+            )}
           </div>
         </form>
       </CardContent>
@@ -658,9 +739,11 @@ export function FuelRequestForm({ vehicles, departments, defaultDepartamentoId }
     <SignatureModal
       open={showSignatureModal}
       onOpenChange={setShowSignatureModal}
-      title="Firma del Solicitante"
-      description="Dibuja tu firma para confirmar y enviar la solicitud de combustible."
-      confirmLabel="Firmar y Enviar"
+      title={isEdit ? 'Firma del Visto Bueno' : 'Firma del Solicitante'}
+      description={isEdit
+        ? 'Firma para aprobar la solicitud con las modificaciones que hiciste.'
+        : 'Dibuja tu firma para confirmar y enviar la solicitud de combustible.'}
+      confirmLabel={isEdit ? 'Guardar y Aprobar' : 'Firmar y Enviar'}
       onConfirm={handleConfirmSignature}
     />
     </>
