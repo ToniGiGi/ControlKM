@@ -25,6 +25,7 @@ import {
 } from '@/app/actions/db'
 import { useRole } from '@/components/role-provider'
 import { toast } from 'sonner'
+import { WhatsAppTestCard } from '@/components/organization/whatsapp-test-card'
 import Image from 'next/image'
 
 const ROLE_OPTIONS = [
@@ -500,6 +501,8 @@ export default function OrganizacionPage() {
           </div>
         </div>
       </div>
+
+      {canManageUsers && <WhatsAppTestCard />}
 
       {/* Usuarios y Roles (solo Super Admin) */}
       {canManageUsers && (

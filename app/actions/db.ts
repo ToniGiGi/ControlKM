@@ -4,7 +4,7 @@ import { getPrisma } from '@/lib/prisma'
 import { auth } from '@/auth'
 import { revalidatePath } from 'next/cache'
 import { hashPassword } from '@/lib/password'
-import { notifyRoleByWhatsApp } from '@/lib/whatsapp'
+import { notifyRoleByWhatsApp, diagnoseWhatsApp } from '@/lib/whatsapp'
 
 const mxn = (n: number | null | undefined) => (n || 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })
 
@@ -1257,6 +1257,15 @@ export async function deleteInsuranceCompany(id: string) {
 // oculta la sección completa con can('gestionar_usuarios')).
 
 const VALID_ROLES = ['SUPER_ADMIN', 'ADMINISTRADOR', 'CUENTAS_POR_PAGAR', 'CONDUCTOR']
+
+// Manda un WhatsApp de prueba a administradores y Cuentas por Pagar y devuelve el resultado por persona.
+export async function testWhatsAppNotifications() {
+  const session = await auth()
+  if (String((session?.user as any)?.role || '').toUpperCase() !== 'SUPER_ADMIN') {
+    throw new Error('Solo el Super Admin puede probar las notificaciones')
+  }
+  return diagnoseWhatsApp()
+}
 
 export async function getUsers() {
   const prisma = getPrisma()
