@@ -399,40 +399,40 @@ export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListPr
                   </div>
 
                   {/* Botones de acción inferior */}
-                  <div className="mt-4 pt-3 border-t border-border/50 flex justify-between items-center">
-                    <div className="flex gap-1">
-                      <Button variant="ghost" size="sm" className="h-8 text-xs gap-1.5 text-muted-foreground hover:text-foreground" onClick={() => setPdfData(r)}>
+                  <div className="mt-4 pt-3 border-t border-border/50 flex justify-between items-center max-sm:justify-start max-sm:gap-1">
+                    <div className="flex gap-1 max-sm:mr-auto">
+                      <Button variant="ghost" size="sm" className="h-8 text-xs gap-0 sm:gap-1.5 text-muted-foreground hover:text-foreground" onClick={() => setPdfData(r)}>
                         <FileDown className="size-3.5" />
-                        Generar PDF
+                        <span className="sr-only sm:not-sr-only">Generar PDF</span>
                       </Button>
                       {canEdit(r) && (
                         <Link href={`/combustible/${r.id}/editar`}>
-                          <Button variant="ghost" size="sm" className="h-8 text-xs gap-1.5 text-muted-foreground hover:text-foreground">
+                          <Button variant="ghost" size="sm" className="h-8 text-xs gap-0 sm:gap-1.5 text-muted-foreground hover:text-foreground">
                             <Pencil className="size-3.5" />
-                            Editar
+                            <span className="sr-only sm:not-sr-only">Editar</span>
                           </Button>
                         </Link>
                       )}
                     </div>
                     
                     {r.estado === 'PENDIENTE' && can('aprobar_solicitudes') && (
-                      <div className="flex gap-2 w-full sm:w-auto">
+                      <div className="flex gap-2">
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() => handleReject(r.id)}
-                          className="flex-1 sm:flex-none text-red-500 hover:text-red-600 hover:bg-red-50"
+                          className="text-red-500 hover:text-red-600 hover:bg-red-50"
                         >
-                          <XCircle className="size-4 mr-1" />
-                          Rechazar
+                          <XCircle className="size-4 sm:mr-1" />
+                          <span className="sr-only sm:not-sr-only">Rechazar</span>
                         </Button>
                         <Button
                           size="sm"
                           onClick={() => handleApprove(r.id)}
-                          className="flex-1 sm:flex-none bg-emerald-600 hover:bg-emerald-700 text-white"
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white"
                         >
-                          <CheckCircle className="size-4 mr-1" />
-                          Dar Visto Bueno
+                          <CheckCircle className="size-4 sm:mr-1" />
+                          <span className="sr-only sm:not-sr-only">Dar Visto Bueno</span>
                         </Button>
                       </div>
                     )}
@@ -440,10 +440,10 @@ export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListPr
                       <Button
                         size="sm"
                         onClick={() => handlePay(r.id)}
-                        className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-700 text-white"
+                        className="bg-blue-600 hover:bg-blue-700 text-white"
                       >
-                        <Banknote className="size-4 mr-1" />
-                        Pagar y Firmar
+                        <Banknote className="size-4 sm:mr-1" />
+                        <span className="sr-only sm:not-sr-only">Pagar y Firmar</span>
                       </Button>
                     )}
                     {(can('eliminar') || (isConductor && r.estado === 'PENDIENTE')) && (
