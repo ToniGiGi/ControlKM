@@ -264,6 +264,7 @@ model FuelRequest {
 
   observacionesRechazo String?
   modificadaPorAdmin   Boolean @default(false)
+  motivoModificacion   String? // por qué el administrador ajustó la solicitud; se le avisa al solicitante
 
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt

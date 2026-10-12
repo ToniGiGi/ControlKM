@@ -4,9 +4,15 @@ import { getPrisma } from '@/lib/prisma'
 import { auth } from '@/auth'
 import { revalidatePath } from 'next/cache'
 import { hashPassword } from '@/lib/password'
-import { notifyRoleByWhatsApp, diagnoseWhatsApp } from '@/lib/whatsapp'
+import { notifyRoleByWhatsApp, notifyEmployeeByWhatsApp, diagnoseWhatsApp } from '@/lib/whatsapp'
 
-const mxn = (n: number | null | undefined) => (n || 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })
+// Nombre de quien ejecuta la acción (aprueba, rechaza o paga), para los avisos al empleado.
+async function actorName() {
+  const session = await auth()
+  return session?.user?.name || session?.user?.email || 'Administración'
+}
+
+const mxn =(n: number | null | undefined) => (n || 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })
 
 // Genera folios secuenciales (QRQ-C-0001, QRQ-V-0001, ...) usando un contador
 // persistente en OrganizationConfig, para que nunca se reutilicen números aunque
@@ -566,12 +572,12 @@ export async function editFuelRequest(id: string, data: any) {
 
   const {
     vehiculoId, estado, folio, firmaSolicitanteUrl, firmaAprobadorUrl, firmaPagoUrl,
-    fechaPago, modificadaPorAdmin, observacionesRechazo, ...rest
+    fechaPago, modificadaPorAdmin, observacionesRechazo, motivoModificacion, ...rest
   } = cleanFuelRequestData(data)
 
   await prisma.fuelRequest.update({
     where: { id },
-    data: { ...rest, vehiculoId, ...(isAdmin ? { modificadaPorAdmin: true } : {}) },
+    data: { ...rest, vehiculoId, ...(isAdmin ? { modificadaPorAdmin: true, motivoModificacion: motivoModificacion || null } : {}) },
   })
 
   revalidatePath('/combustible')
@@ -596,11 +602,18 @@ export async function approveFuelRequest(id: string, firmaAprobadorUrl?: string)
   const prisma = getPrisma()
   const req = await prisma.fuelRequest.update({
     where: { id },
-    data: { estado: 'APROBADA', ...(firmaAprobadorUrl ? { firmaAprobadorUrl } : {}) }
+    data: { estado: 'APROBADA', ...(firmaAprobadorUrl ? { firmaAprobadorUrl } : {}) },
+    include: { vehiculo: { select: { empleadoId: true } } },
   })
 
-  await notifyRoleByWhatsApp('CUENTAS_POR_PAGAR',
-    `✅ *Solicitud de combustible aprobada* ${req.folio}\nSolicitante: ${req.solicitanteNombre || 'Sin nombre'}\nMotivo: ${req.motivo || '-'}\nMonto a pagar: ${mxn(req.costoTotal)}\n\nLista para pago: https://controlkm.com/combustible`)
+  const aprobador = await actorName()
+  await Promise.all([
+    notifyRoleByWhatsApp('CUENTAS_POR_PAGAR',
+      `✅ *Solicitud de combustible aprobada* ${req.folio}\nSolicitante: ${req.solicitanteNombre || 'Sin nombre'}\nMotivo: ${req.motivo || '-'}\nMonto a pagar: ${mxn(req.costoTotal)}\n\nLista para pago: https://controlkm.com/combustible`),
+    notifyEmployeeByWhatsApp(req.vehiculo?.empleadoId, req.modificadaPorAdmin
+      ? `✅ *Tu solicitud de combustible ${req.folio} fue aceptada con modificaciones*\nAceptada por: ${aprobador}\nMotivo de la modificación: ${req.motivoModificacion || 'No especificado'}\nMonto autorizado: ${mxn(req.costoTotal)}\n\nRevísala en https://controlkm.com/combustible`
+      : `✅ *Tu solicitud de combustible ${req.folio} fue aceptada*\nAceptada por: ${aprobador}\nMonto autorizado: ${mxn(req.costoTotal)}`),
+  ])
 
   revalidatePath('/combustible')
   revalidatePath('/vehiculos')
@@ -611,8 +624,13 @@ export async function rejectFuelRequest(id: string, observacionesRechazo?: strin
   const prisma = getPrisma()
   const req = await prisma.fuelRequest.update({
     where: { id },
-    data: { estado: 'RECHAZADA', observacionesRechazo: observacionesRechazo || null }
+    data: { estado: 'RECHAZADA', observacionesRechazo: observacionesRechazo || null },
+    include: { vehiculo: { select: { empleadoId: true } } },
   })
+
+  await notifyEmployeeByWhatsApp(req.vehiculo?.empleadoId,
+    `❌ *Tu solicitud de combustible ${req.folio} fue rechazada*\nRechazada por: ${await actorName()}${req.observacionesRechazo ? `\nMotivo: ${req.observacionesRechazo}` : ''}`)
+
   revalidatePath('/combustible')
   revalidatePath('/vehiculos')
   return req
@@ -623,8 +641,12 @@ export async function payFuelRequest(id: string, firmaPagoUrl: string) {
   const prisma = getPrisma()
   const req = await prisma.fuelRequest.update({
     where: { id },
-    data: { estado: 'PAGADA', firmaPagoUrl, fechaPago: new Date() }
+    data: { estado: 'PAGADA', firmaPagoUrl, fechaPago: new Date() },
+    include: { vehiculo: { select: { empleadoId: true } } },
   })
+
+  await notifyEmployeeByWhatsApp(req.vehiculo?.empleadoId,
+    `💵 *Tu solicitud de combustible ${req.folio} fue pagada*\nPagada por: ${await actorName()}\nMonto: ${mxn(req.costoTotal)}`)
 
   revalidatePath('/combustible')
   revalidatePath('/vehiculos')
@@ -668,8 +690,13 @@ export async function approveTravelRequest(id: string, firmaAprobadorUrl?: strin
     data: { estado: 'APROBADA', ...(firmaAprobadorUrl ? { firmaAprobadorUrl } : {}) }
   })
 
-  await notifyRoleByWhatsApp('CUENTAS_POR_PAGAR',
-    `✅ *Solicitud de viáticos aprobada* ${req.folio}\nSolicitante: ${req.solicitanteNombre || 'Sin nombre'}\nMonto a pagar: ${mxn(req.costoTotal)}\n\nLista para pago: https://controlkm.com/viaticos`)
+  const aprobador = await actorName()
+  await Promise.all([
+    notifyRoleByWhatsApp('CUENTAS_POR_PAGAR',
+      `✅ *Solicitud de viáticos aprobada* ${req.folio}\nSolicitante: ${req.solicitanteNombre || 'Sin nombre'}\nMonto a pagar: ${mxn(req.costoTotal)}\n\nLista para pago: https://controlkm.com/viaticos`),
+    notifyEmployeeByWhatsApp(req.empleadoId,
+      `✅ *Tu solicitud de viáticos ${req.folio} fue aceptada*\nAceptada por: ${aprobador}\nMonto autorizado: ${mxn(req.costoTotal)}`),
+  ])
 
   revalidatePath('/viaticos')
   return req
@@ -681,6 +708,9 @@ export async function rejectTravelRequest(id: string, observacionesRechazo?: str
     where: { id },
     data: { estado: 'RECHAZADA', observacionesRechazo: observacionesRechazo || null }
   })
+
+  await notifyEmployeeByWhatsApp(req.empleadoId,
+    `❌ *Tu solicitud de viáticos ${req.folio} fue rechazada*\nRechazada por: ${await actorName()}${req.observacionesRechazo ? `\nMotivo: ${req.observacionesRechazo}` : ''}`)
   revalidatePath('/viaticos')
   return req
 }
@@ -692,6 +722,9 @@ export async function payTravelRequest(id: string, firmaPagoUrl: string) {
     where: { id },
     data: { estado: 'PAGADA', firmaPagoUrl, fechaPago: new Date() }
   })
+
+  await notifyEmployeeByWhatsApp(req.empleadoId,
+    `💵 *Tu solicitud de viáticos ${req.folio} fue pagada*\nPagada por: ${await actorName()}\nMonto: ${mxn(req.costoTotal)}`)
 
   revalidatePath('/viaticos')
   return req

@@ -59,8 +59,13 @@ async function getRecipients(roles: Role[]) {
   }))
 }
 
+type Recipient = { nombre: string; role: string; telefono: string | null }
+
 async function sendToRecipients(roles: Role[], text: string): Promise<WhatsAppResult[]> {
-  const recipients = await getRecipients(roles)
+  return sendTo(await getRecipients(roles), text)
+}
+
+async function sendTo(recipients: Recipient[], text: string): Promise<WhatsAppResult[]> {
   const sent = new Set<string>()
   return Promise.all(recipients.map(async (r): Promise<WhatsAppResult> => {
     const digits = last10Digits(r.telefono)
@@ -86,6 +91,26 @@ export async function notifyRoleByWhatsApp(role: Role, text: string) {
     results.filter(r => !r.ok).forEach(r => console.error('WhatsApp no enviado a', r.nombre, '-', r.detalle))
   } catch (e) {
     console.error('Error en notificación de WhatsApp', e)
+  }
+}
+
+// Aviso al empleado dueño de la solicitud. Nunca lanza, igual que notifyRoleByWhatsApp.
+export async function notifyEmployeeByWhatsApp(empleadoId: string | null | undefined, text: string) {
+  try {
+    if (!empleadoId || !process.env.WHATSAPP_API_URL || !process.env.WHATSAPP_API_KEY) return
+    const onlyTo = process.env.WHATSAPP_ONLY_TO
+    let recipient: Recipient
+    if (onlyTo) {
+      recipient = { nombre: 'Número de prueba', role: 'EMPLEADO', telefono: onlyTo }
+    } else {
+      const emp = await getPrisma().employee.findUnique({ where: { id: empleadoId }, select: { nombre: true, telefono: true } })
+      if (!emp) return
+      recipient = { nombre: emp.nombre, role: 'EMPLEADO', telefono: emp.telefono }
+    }
+    const [result] = await sendTo([recipient], text)
+    if (!result.ok) console.error('WhatsApp no enviado a', result.nombre, '-', result.detalle)
+  } catch (e) {
+    console.error('Error en notificación de WhatsApp al empleado', e)
   }
 }
 

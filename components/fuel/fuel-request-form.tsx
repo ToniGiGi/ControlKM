@@ -370,7 +370,10 @@ export function FuelRequestForm({ vehicles, departments, defaultDepartamentoId, 
   // Al editar, el administrador puede solo guardar o guardar y dar el visto bueno en un paso.
   const submitIntent = useRef<'save' | 'approve'>('save')
 
+  const [motivoModificacion, setMotivoModificacion] = useState<string>(initialRequest?.motivoModificacion ?? '')
+
   const buildPayload = () => ({
+    ...(isEdit && canApprove ? { motivoModificacion: motivoModificacion.trim() } : {}),
     vehiculoId,
     solicitanteNombre,
     departamentoId,
@@ -701,6 +704,19 @@ export function FuelRequestForm({ vehicles, departments, defaultDepartamentoId, 
               </div>
             </CardContent>
           </Card>
+
+          {isEdit && canApprove && (
+            <div className="space-y-2">
+              <Label>Motivo de la modificación <span className="text-destructive">*</span></Label>
+              <Input
+                required
+                placeholder="Ej. Se ajustó la holgura y el número de casetas"
+                value={motivoModificacion}
+                onChange={e => setMotivoModificacion(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">El solicitante recibirá este motivo por WhatsApp cuando se apruebe la solicitud.</p>
+            </div>
+          )}
 
           <div className="pt-6 flex justify-end gap-4 border-t">
             <Button type="button" variant="outline" onClick={() => router.push('/combustible')} disabled={isSubmitting}>Cancelar</Button>
