@@ -1,8 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { useState, useMemo, useEffect } from 'react'
-import { Plus, Search, Fuel, CreditCard, Banknote, Map, CheckCircle, XCircle, FileDown, Trash2, LayoutGrid, List, FileSpreadsheet, Pencil } from 'lucide-react'
+import { useState, useMemo, useEffect, useRef } from 'react'
+import { Plus, Search, Fuel, CreditCard, Banknote, Map, CheckCircle, XCircle, FileDown, Trash2, LayoutGrid, List, FileSpreadsheet, Pencil, Columns3 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -25,6 +25,10 @@ import { approveFuelRequest, rejectFuelRequest, payFuelRequest, deleteFuelReques
 import { useRole } from '@/components/role-provider'
 import { ListPagination } from '@/components/ui/list-pagination'
 import { exportRowsToExcel } from '@/lib/excel-export'
+import { useFuelColumnPrefs, ManageColumnsDialog } from './fuel-table-columns'
+
+// Acciones queda fija a la derecha: si la ventana se achica, la tabla se desplaza por debajo pero los botones siguen visibles.
+const STICKY_ACTIONS = 'sticky right-0 z-10 bg-card shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.15)]'
 
 const PAGE_SIZE = 12
 
@@ -46,6 +50,19 @@ export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListPr
   const [fechaDesde, setFechaDesde] = useState('')
   const [fechaHasta, setFechaHasta] = useState('')
   const [view, setView] = useState<'grid' | 'table'>('grid')
+  const [showColumnsDialog, setShowColumnsDialog] = useState(false)
+  // La barra de filtros mide lo mismo que la tabla y siempre está en pantalla, así que sirve
+  // para saber cuánto espacio hay para columnas aunque la tabla esté vacía.
+  const toolbarRef = useRef<HTMLDivElement>(null)
+  const [tableWidth, setTableWidth] = useState(0)
+  useEffect(() => {
+    const el = toolbarRef.current
+    if (!el) return
+    const observer = new ResizeObserver(([entry]) => setTableWidth(Math.round(entry.contentRect.width)))
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+  const { prefs: columnPrefs, setPrefs: setColumnPrefs, visibleColumns } = useFuelColumnPrefs(config.empleadoId || config.nombre)
   const [page, setPage] = useState(1)
 
   const [pdfData, setPdfData] = useState<any | null>(null)
@@ -199,6 +216,14 @@ export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListPr
         />
       )}
 
+      <ManageColumnsDialog
+        open={showColumnsDialog}
+        onOpenChange={setShowColumnsDialog}
+        prefs={columnPrefs}
+        onSave={setColumnPrefs}
+        availableWidth={tableWidth}
+      />
+
       <SignatureModal
         open={!!approvingId}
         onOpenChange={(open) => { if (!open) setApprovingId(null) }}
@@ -242,7 +267,7 @@ export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListPr
         </div>
       </PageHeader>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+      <div ref={toolbarRef} className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
         <div className="relative flex-1 min-w-[200px]">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -302,6 +327,13 @@ export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListPr
             <List className="size-4" />
           </Button>
         </div>
+
+        {view === 'table' && (
+          <Button variant="outline" className="hidden gap-2 sm:flex" onClick={() => setShowColumnsDialog(true)}>
+            <Columns3 className="size-4" />
+            Columnas
+          </Button>
+        )}
       </div>
 
       {filtered.length === 0 && (
@@ -470,14 +502,10 @@ export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListPr
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Vehículo</TableHead>
-                  <TableHead>Solicitante</TableHead>
-                  <TableHead>Motivo y Ruta</TableHead>
-                  <TableHead>Gasolina</TableHead>
-                  <TableHead>Distancia</TableHead>
-                  <TableHead>Costo Total</TableHead>
-                  <TableHead>Estado</TableHead>
-                  <TableHead className="text-right">Acciones</TableHead>
+                  {visibleColumns.map(col => (
+                    <TableHead key={col.id} className="whitespace-nowrap">{col.label}</TableHead>
+                  ))}
+                  <TableHead className={`text-right ${STICKY_ACTIONS}`}>Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -495,52 +523,12 @@ export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListPr
 
                   return (
                     <TableRow key={r.id}>
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <Avatar className="size-9 rounded-md bg-muted p-1 shrink-0">
-                            <AvatarFallback className="rounded-md bg-transparent text-primary">
-                              <Fuel className="size-4" />
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="flex flex-col">
-                            <span className="font-medium text-sm truncate max-w-[180px]">{r.vehiculo?.nombreInterno || 'Vehículo Desconocido'}</span>
-                            {r.folio && <span className="text-[10px] font-mono text-muted-foreground">{r.folio}</span>}
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col text-sm">
-                          <span className="font-medium">{r.solicitanteNombre || 'Sin nombre'}</span>
-                          <span className="text-xs text-muted-foreground">{formatDate(r.fechaSolicitud)}{r.createdAt ? ` · ${formatTime(r.createdAt)}` : ""}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col text-sm max-w-[220px]">
-                          <span className="font-medium truncate">{r.motivo}</span>
-                          <span className="text-xs text-muted-foreground truncate">{r.rutas}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col text-sm">
-                          <span>{r.tipoGasolina}</span>
-                          <span className="text-xs text-muted-foreground">{r.litrosSolicitados.toFixed(1)} L</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col text-sm">
-                          <span>{new Intl.NumberFormat().format(r.kmHolgura)} km</span>
-                          <span className="text-xs text-muted-foreground">{r.numCasetas ? `+${r.numCasetas} Casetas` : 'Sin peajes'}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <span className="font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(r.costoTotal)}</span>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={`text-xs ${badgeClass}`}>
-                          {r.estado}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
+                      {visibleColumns.map(col => (
+                        <TableCell key={col.id}>
+                          {col.render(r, { formatDate, formatTime, formatCurrency, badgeClass })}
+                        </TableCell>
+                      ))}
+                      <TableCell className={`text-right ${STICKY_ACTIONS}`}>
                         <div className="flex justify-end items-center gap-1">
                           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setPdfData(r)} title="Generar PDF">
                             <FileDown className="size-4 text-muted-foreground" />
