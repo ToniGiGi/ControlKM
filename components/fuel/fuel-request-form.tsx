@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent } from '@/components/ui/card'
 import { createFuelRequest, editFuelRequest, approveFuelRequest } from '@/app/actions/db'
 import { useRole } from '@/components/role-provider'
-import { RouteMap, legColor, type MapMarker, type MapRoute } from './route-map'
+import { RouteMap, legColor, buildRouteLayers, simplifyLine } from './route-map'
 import { SignatureModal } from '@/components/shared/signature-modal'
 
 const GAS_PRICES = {
@@ -46,7 +46,10 @@ function legsFromRequest(req: any): RouteLeg[] {
   if (req.rutasDetalle) {
     try {
       const legs = JSON.parse(req.rutasDetalle)
-      if (Array.isArray(legs) && legs.length > 0) return legs.map((l: any) => ({ origen: l.origen || '', destino: l.destino || '', tipo: l.tipo === 'redondo' ? 'redondo' : 'sencillo', km: typeof l.km === 'number' ? l.km : '' }))
+      if (Array.isArray(legs) && legs.length > 0) return legs.map((l: any) => ({
+        origen: l.origen || '', destino: l.destino || '', tipo: l.tipo === 'redondo' ? 'redondo' : 'sencillo', km: typeof l.km === 'number' ? l.km : '',
+        ...(l.geo?.coords?.length ? { geo: l.geo } : {}),
+      }))
     } catch {}
   }
   const parts: string[] = (req.rutas || '').split(' | ').filter(Boolean)
@@ -319,27 +322,7 @@ export function FuelRequestForm({ vehicles, departments, defaultDepartamentoId, 
     }
   }
 
-  const mapRoutes: MapRoute[] = routeLegs.flatMap((leg, i) =>
-    leg.geo ? [{ coordinates: leg.geo.coords, color: legColor(i).hex }] : []
-  )
-
-  // Un tramo encadenado comparte su origen con el destino del anterior, así que no se repite ese pin.
-  const mapMarkers: MapMarker[] = routeLegs.flatMap((leg, i) => {
-    if (!leg.geo) return []
-    const multi = routeLegs.length > 1
-    const markers: MapMarker[] = []
-    if (!(leg.geo.chained && routeLegs[i - 1]?.geo)) {
-      markers.push({
-        lat: leg.geo.orig.lat, lng: leg.geo.orig.lon, color: 'blue', legIndex: i, role: 'origen',
-        title: `${multi && i > 0 ? `Origen tramo ${i + 1}` : 'Salida'}: ${leg.origen}`,
-      })
-    }
-    markers.push({
-      lat: leg.geo.dest.lat, lng: leg.geo.dest.lon, color: legColor(i).name, legIndex: i, role: 'destino',
-      title: `${multi ? `Destino ${i + 1}` : 'Destino'}: ${leg.destino}`,
-    })
-    return markers
-  })
+  const { routes: mapRoutes, markers: mapMarkers } = buildRouteLayers(routeLegs)
 
   // Motor de Calculadora Inteligente
   useEffect(() => {
@@ -382,7 +365,11 @@ export function FuelRequestForm({ vehicles, departments, defaultDepartamentoId, 
     tarjetaToka,
     numeroTag,
     rutas: routeLegs.map(l => `${l.origen || '?'} - ${l.destino || '?'} (${l.tipo})`).join(' | '),
-    rutasDetalle: JSON.stringify(routeLegs.map(({ origen, destino, tipo, km }) => ({ origen, destino, tipo, km }))),
+    // Se guarda también el trazo de cada tramo para poder mostrar la ruta después ("Ver ruta").
+    rutasDetalle: JSON.stringify(routeLegs.map(({ origen, destino, tipo, km, geo }) => ({
+      origen, destino, tipo, km,
+      ...(geo ? { geo: { ...geo, coords: simplifyLine(geo.coords) } } : {}),
+    }))),
     kmAproximado: routeLegs.reduce((acc, leg) => acc + ((typeof leg.km === 'number' ? leg.km : 0) * (leg.tipo === 'redondo' ? 2 : 1)), 0),
     kmHolgura: kmTotal,
     rendimiento,

@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useState, useMemo, useEffect, useRef } from 'react'
-import { Plus, Search, Fuel, CreditCard, Banknote, Map, CheckCircle, XCircle, FileDown, Trash2, LayoutGrid, List, FileSpreadsheet, Pencil, Columns3 } from 'lucide-react'
+import { Plus, Search, Fuel, CreditCard, Banknote, Map, CheckCircle, XCircle, FileDown, Trash2, LayoutGrid, List, FileSpreadsheet, Pencil, Columns3, Route } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -26,6 +26,8 @@ import { useRole } from '@/components/role-provider'
 import { ListPagination } from '@/components/ui/list-pagination'
 import { exportRowsToExcel } from '@/lib/excel-export'
 import { useFuelColumnPrefs, ManageColumnsDialog } from './fuel-table-columns'
+import { RouteViewerDialog } from './route-viewer-dialog'
+import { hasSavedRoute } from './route-map'
 
 // Acciones queda fija a la derecha: si la ventana se achica, la tabla se desplaza por debajo pero los botones siguen visibles.
 const STICKY_ACTIONS = 'sticky right-0 z-10 bg-card shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.15)]'
@@ -51,6 +53,7 @@ export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListPr
   const [fechaHasta, setFechaHasta] = useState('')
   const [view, setView] = useState<'grid' | 'table'>('grid')
   const [showColumnsDialog, setShowColumnsDialog] = useState(false)
+  const [routeData, setRouteData] = useState<any | null>(null)
   // La barra de filtros mide lo mismo que la tabla y siempre está en pantalla, así que sirve
   // para saber cuánto espacio hay para columnas aunque la tabla esté vacía.
   const toolbarRef = useRef<HTMLDivElement>(null)
@@ -215,6 +218,8 @@ export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListPr
           onClose={() => setPdfData(null)}
         />
       )}
+
+      <RouteViewerDialog request={routeData} onClose={() => setRouteData(null)} />
 
       <ManageColumnsDialog
         open={showColumnsDialog}
@@ -437,6 +442,12 @@ export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListPr
                         <FileDown className="size-3.5" />
                         <span className="sr-only sm:not-sr-only">Generar PDF</span>
                       </Button>
+                      {hasSavedRoute(r.rutasDetalle) && (
+                        <Button variant="ghost" size="sm" className="h-8 text-xs gap-0 sm:gap-1.5 text-muted-foreground hover:text-foreground" onClick={() => setRouteData(r)}>
+                          <Route className="size-3.5" />
+                          <span className="sr-only sm:not-sr-only">Ver ruta</span>
+                        </Button>
+                      )}
                       {canEdit(r) && (
                         <Link href={`/combustible/${r.id}/editar`}>
                           <Button variant="ghost" size="sm" className="h-8 text-xs gap-0 sm:gap-1.5 text-muted-foreground hover:text-foreground">
@@ -533,6 +544,11 @@ export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListPr
                           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setPdfData(r)} title="Generar PDF">
                             <FileDown className="size-4 text-muted-foreground" />
                           </Button>
+                          {hasSavedRoute(r.rutasDetalle) && (
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setRouteData(r)} title="Ver ruta">
+                              <Route className="size-4 text-muted-foreground" />
+                            </Button>
+                          )}
                           {canEdit(r) && (
                             <Link href={`/combustible/${r.id}/editar`}>
                               <Button variant="ghost" size="icon" className="h-8 w-8" title="Editar">

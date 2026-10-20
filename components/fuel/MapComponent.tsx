@@ -47,9 +47,15 @@ interface MapComponentProps {
 function ChangeView({ bounds, fitKey }: { bounds: L.LatLngBoundsExpression; fitKey?: number }) {
   const map = useMap();
   useEffect(() => {
-    if (bounds) {
+    if (!bounds) return;
+    map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
+    // Dentro de un diálogo el contenedor aún se está animando al montar el mapa; se recalcula su
+    // tamaño y se vuelve a encuadrar cuando ya tiene sus medidas finales.
+    const t = setTimeout(() => {
+      map.invalidateSize();
       map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
-    }
+    }, 250);
+    return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fitKey]);
   return null;
