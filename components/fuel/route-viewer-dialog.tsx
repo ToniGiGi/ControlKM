@@ -35,6 +35,7 @@ export function RouteViewerDialog({ request, onClose }: { request: any | null; o
                 <span className="text-muted-foreground">
                   {typeof leg.km === 'number' ? ` · ${leg.km} km` : ''}{leg.tipo === 'redondo' ? ' · redondo' : ''}
                 </span>
+                {!leg.geo && <span className="ml-1 text-xs text-amber-600">(sin trazo en el mapa)</span>}
               </span>
             </li>
           ))}

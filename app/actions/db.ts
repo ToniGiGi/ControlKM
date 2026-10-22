@@ -519,7 +519,17 @@ function cleanFuelRequestData(data: any) {
   return rest;
 }
 
+// Toda solicitud de combustible debe llevar la ruta de cada tramo trazada en el mapa.
+function assertRoutesComplete(rutasDetalle: unknown) {
+  let legs: any[] = []
+  try { legs = JSON.parse(String(rutasDetalle || '[]')) } catch {}
+  if (!Array.isArray(legs) || legs.length === 0 || legs.some(l => !l?.geo?.coords?.length)) {
+    throw new Error('Cada tramo debe tener su ruta calculada en el mapa')
+  }
+}
+
 export async function createFuelRequest(data: any) {
+  assertRoutesComplete(data?.rutasDetalle)
   const prisma = getPrisma()
   const { vehiculoId, ...rest } = data
   if (!rest.departamentoId || rest.departamentoId === 'unassigned') rest.departamentoId = null
@@ -566,6 +576,7 @@ export async function editFuelRequest(id: string, data: any) {
   })
   if (!current) throw new Error('Solicitud no encontrada')
   if (current.estado !== 'PENDIENTE') throw new Error('Solo se pueden editar solicitudes pendientes')
+  assertRoutesComplete(data?.rutasDetalle)
   if (!isAdmin && (role !== 'CONDUCTOR' || !employeeId || current.vehiculo?.empleadoId !== employeeId)) {
     throw new Error('No tienes permiso para editar esta solicitud')
   }

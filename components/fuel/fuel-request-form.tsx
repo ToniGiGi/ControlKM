@@ -11,6 +11,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { createFuelRequest, editFuelRequest, approveFuelRequest } from '@/app/actions/db'
 import { useRole } from '@/components/role-provider'
 import { RouteMap, legColor, buildRouteLayers, simplifyLine } from './route-map'
+import { geocode, getRouteInfo } from '@/lib/geo-route'
 import { SignatureModal } from '@/components/shared/signature-modal'
 
 const GAS_PRICES = {
@@ -213,33 +214,6 @@ export function FuelRequestForm({ vehicles, departments, defaultDepartamentoId, 
     })
   }
 
-  const geocode = async (address: string) => {
-    const query = encodeURIComponent(`${address}, Mexico`);
-    const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1`);
-    const data = await res.json();
-    if (data && data.length > 0) {
-      return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
-    }
-    const fallbackRes = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1`);
-    const fallbackData = await fallbackRes.json();
-    if (fallbackData && fallbackData.length > 0) {
-      return { lat: parseFloat(fallbackData[0].lat), lon: parseFloat(fallbackData[0].lon) };
-    }
-    return null;
-  }
-
-  const getRouteInfo = async (coord1: {lat: number, lon: number}, coord2: {lat: number, lon: number}) => {
-    const res = await fetch(`https://router.project-osrm.org/route/v1/driving/${coord1.lon},${coord1.lat};${coord2.lon},${coord2.lat}?overview=full&geometries=geojson`);
-    const data = await res.json();
-    if (data.code === 'Ok' && data.routes.length > 0) {
-      const route = data.routes[0];
-      const distanceKm = route.distance / 1000;
-      const coordinates = route.geometry.coordinates.map((c: number[]) => [c[1], c[0]] as [number, number]);
-      return { distanceKm, coordinates };
-    }
-    return null;
-  }
-
   const applyLegRoute = async (index: number, orig: Coord, dest: Coord, chained: boolean) => {
     const routeInfo = await getRouteInfo(orig, dest);
     if (!routeInfo) return false;
@@ -277,11 +251,13 @@ export function FuelRequestForm({ vehicles, departments, defaultDepartamentoId, 
     setIsCalculatingRoute(true);
     try {
       // Si sale del destino anterior se reutiliza ese punto exacto (incluso si se ajustó arrastrando el pin).
-      const origCoord = chained ? prevLeg!.geo!.dest : await geocode(leg.origen);
-      const destCoord = await geocode(leg.destino);
+      // Se busca cerca del punto anterior; si la dirección exacta no existe en el mapa se usa la
+      // colonia o la ciudad, y el conductor arrastra el pin al lugar correcto.
+      const origCoord = chained ? prevLeg!.geo!.dest : await geocode(leg.origen, { near: prevLeg?.geo?.dest });
+      const destCoord = origCoord ? await geocode(leg.destino, { near: origCoord }) : null;
 
       if (!origCoord || !destCoord) {
-        alert("No se pudo encontrar las coordenadas de Origen o Destino en el mapa. Revisa la escritura.");
+        alert("No se pudo encontrar el Origen o el Destino en el mapa. Prueba escribiendo la ciudad (por ejemplo \"Celaya, Guanajuato\") y después arrastra el pin al punto exacto.");
         return;
       }
 
@@ -355,7 +331,7 @@ export function FuelRequestForm({ vehicles, departments, defaultDepartamentoId, 
 
   const [motivoModificacion, setMotivoModificacion] = useState<string>(initialRequest?.motivoModificacion ?? '')
 
-  const buildPayload = () => ({
+  const buildPayload = (legs: RouteLeg[] = routeLegs) => ({
     ...(isEdit && canApprove ? { motivoModificacion: motivoModificacion.trim() } : {}),
     vehiculoId,
     solicitanteNombre,
@@ -364,13 +340,13 @@ export function FuelRequestForm({ vehicles, departments, defaultDepartamentoId, 
     motivo,
     tarjetaToka,
     numeroTag,
-    rutas: routeLegs.map(l => `${l.origen || '?'} - ${l.destino || '?'} (${l.tipo})`).join(' | '),
+    rutas: legs.map(l => `${l.origen || '?'} - ${l.destino || '?'} (${l.tipo})`).join(' | '),
     // Se guarda también el trazo de cada tramo para poder mostrar la ruta después ("Ver ruta").
-    rutasDetalle: JSON.stringify(routeLegs.map(({ origen, destino, tipo, km, geo }) => ({
+    rutasDetalle: JSON.stringify(legs.map(({ origen, destino, tipo, km, geo }) => ({
       origen, destino, tipo, km,
       ...(geo ? { geo: { ...geo, coords: simplifyLine(geo.coords) } } : {}),
     }))),
-    kmAproximado: routeLegs.reduce((acc, leg) => acc + ((typeof leg.km === 'number' ? leg.km : 0) * (leg.tipo === 'redondo' ? 2 : 1)), 0),
+    kmAproximado: legs.reduce((acc, leg) => acc + ((typeof leg.km === 'number' ? leg.km : 0) * (leg.tipo === 'redondo' ? 2 : 1)), 0),
     kmHolgura: kmTotal,
     rendimiento,
     tipoGasolina,
@@ -386,7 +362,7 @@ export function FuelRequestForm({ vehicles, departments, defaultDepartamentoId, 
   const saveEdit = async (firmaAprobadorUrl?: string) => {
     setIsSubmitting(true)
     try {
-      await editFuelRequest(initialRequest.id, buildPayload())
+      await editFuelRequest(initialRequest.id, buildPayload(resolvedLegs.current))
       if (firmaAprobadorUrl) await approveFuelRequest(initialRequest.id, firmaAprobadorUrl)
       router.push('/combustible')
       router.refresh()
@@ -399,8 +375,18 @@ export function FuelRequestForm({ vehicles, departments, defaultDepartamentoId, 
 
   // El submit del <form> solo dispara la validación nativa (campos required). Crear o
   // aprobar pide firma; guardar cambios de una solicitud existente no.
-  const handleSubmit = (e: React.FormEvent) => {
+  // Tramos con su ruta ya resuelta al momento de enviar (incluye las calculadas automáticamente).
+  const resolvedLegs = useRef<RouteLeg[]>(routeLegs)
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    // Toda solicitud debe llevar su ruta en el mapa: los km salen de "Calcular", no se escriben a mano.
+    const sinRuta = routeLegs.map((l, i) => (l.geo ? null : i + 1)).filter((n): n is number => n !== null)
+    if (sinRuta.length > 0) {
+      alert(`Falta calcular la ruta del tramo ${sinRuta.join(', ')}. Presiona "Calcular" en cada tramo; si el punto no queda exacto, arrastra el pin en el mapa.`)
+      return
+    }
+    resolvedLegs.current = routeLegs
     if (isEdit && submitIntent.current === 'save') {
       saveEdit()
       return
@@ -415,7 +401,7 @@ export function FuelRequestForm({ vehicles, departments, defaultDepartamentoId, 
     }
     setIsSubmitting(true)
     try {
-      await createFuelRequest({ ...buildPayload(), estado: 'PENDIENTE', firmaSolicitanteUrl: firmaUrl })
+      await createFuelRequest({ ...buildPayload(resolvedLegs.current), estado: 'PENDIENTE', firmaSolicitanteUrl: firmaUrl })
 
       router.push('/combustible')
       router.refresh()
@@ -578,7 +564,17 @@ export function FuelRequestForm({ vehicles, departments, defaultDepartamentoId, 
                   )}
                   <div className="w-full sm:w-32 flex flex-col justify-end gap-1.5">
                     <Label className="text-xs whitespace-nowrap">Distancia (km) <span className="text-destructive">*</span></Label>
-                    <Input required type="number" min="1" placeholder="km" value={leg.km} onChange={e => updateRouteLeg(index, 'km', e.target.value ? Number(e.target.value) : '')} />
+                    <Input
+                      required
+                      type="number"
+                      min="1"
+                      placeholder="Calcular"
+                      value={leg.km}
+                      onChange={e => updateRouteLeg(index, 'km', e.target.value ? Number(e.target.value) : '')}
+                      readOnly={!canApprove}
+                      title={canApprove ? undefined : 'Se calcula con el botón "Calcular"'}
+                      className={canApprove ? undefined : 'bg-muted/50 cursor-not-allowed'}
+                    />
                   </div>
                   <div className="flex flex-col justify-end pb-[2px]">
                     <Button type="button" variant="secondary" className="gap-2 shrink-0" onClick={() => calculateLegRoute(index)} disabled={isCalculatingRoute}>
