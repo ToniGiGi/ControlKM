@@ -8,17 +8,14 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card, CardContent } from '@/components/ui/card'
-import { createFuelRequest, editFuelRequest, approveFuelRequest } from '@/app/actions/db'
+import { createFuelRequest, editFuelRequest, approveFuelRequest, type FuelPrices } from '@/app/actions/db'
 import { useRole } from '@/components/role-provider'
 import { RouteMap, legColor, buildRouteLayers, simplifyLine } from './route-map'
 import { geocode, getRouteInfo } from '@/lib/geo-route'
 import { SignatureModal } from '@/components/shared/signature-modal'
 
-const GAS_PRICES = {
-  VERDE: 23.79,
-  ROJA: 28.55,
-  DIESEL: 28.00
-}
+type FuelType = keyof FuelPrices
+const FUEL_TYPES: FuelType[] = ['VERDE', 'ROJA', 'DIESEL']
 
 type Coord = { lat: number; lon: number }
 
@@ -37,9 +34,13 @@ type FuelRequestFormProps = {
   defaultDepartamentoId?: string
   // Si viene, el formulario edita esta solicitud (solo PENDIENTES) en vez de crear una nueva.
   initialRequest?: any
+  // Precios por litro y TAGs disponibles, configurados en Organización.
+  fuelPrices: FuelPrices
+  tagCards: { id: string; numero: string; ubicacion: string | null }[]
 }
 
 const DEFAULT_HOLGURA = 15
+const NO_TAG = '__sin_tag__'
 
 // Las solicitudes nuevas guardan los tramos en rutasDetalle; las anteriores solo tienen
 // el texto "Origen - Destino (tipo) | ...", sin km por tramo.
@@ -66,7 +67,7 @@ function legsFromRequest(req: any): RouteLeg[] {
   return legs.length > 0 ? legs : [{ origen: '', destino: '', tipo: 'sencillo', km: '' }]
 }
 
-export function FuelRequestForm({ vehicles, departments, defaultDepartamentoId, initialRequest }: FuelRequestFormProps) {
+export function FuelRequestForm({ vehicles, departments, defaultDepartamentoId, initialRequest, fuelPrices, tagCards }: FuelRequestFormProps) {
   const router = useRouter()
   const { role, config, can } = useRole()
   const isEdit = !!initialRequest
@@ -99,13 +100,14 @@ export function FuelRequestForm({ vehicles, departments, defaultDepartamentoId, 
 
     const name = [selectedVehicle.nombreInterno, selectedVehicle.marca, selectedVehicle.modelo, selectedVehicle.alias].join(' ').toLowerCase()
     
-    // TOKA y TAG se capturan en el vehículo; aquí solo se precargan y el conductor puede cambiarlos.
+    // La TOKA se captura en el vehículo; aquí solo se precarga y el conductor puede cambiarla.
     setTarjetaToka(selectedVehicle.tarjetaToka || '')
-    setNumeroTag(selectedVehicle.tieneTag ? (selectedVehicle.numeroTag || '') : '')
+    // El TAG no es fijo del vehículo (se prestan entre choferes): se elige en cada solicitud.
+    setNumeroTag('')
 
     // Auto-llenado del Tipo de Gasolina y Rendimiento
     let perf = 10;
-    let fuel: keyof typeof GAS_PRICES = 'VERDE';
+    let fuel: FuelType = 'VERDE';
 
     // Determinar valores por defecto (rendimiento y fuel fallback)
     if (name.includes('byd king')) { fuel = 'VERDE'; perf = 18; }
@@ -127,8 +129,8 @@ export function FuelRequestForm({ vehicles, departments, defaultDepartamentoId, 
     // Si el vehículo tiene combustible definido en la DB, sobrescribe el fallback
     if (selectedVehicle.combustible) {
       const dbFuel = selectedVehicle.combustible.toUpperCase();
-      if (['VERDE', 'ROJA', 'DIESEL'].includes(dbFuel)) {
-        fuel = dbFuel as keyof typeof GAS_PRICES;
+      if ((FUEL_TYPES as string[]).includes(dbFuel)) {
+        fuel = dbFuel as FuelType;
       }
     }
 
@@ -149,8 +151,8 @@ export function FuelRequestForm({ vehicles, departments, defaultDepartamentoId, 
     initialRequest ? Math.max(0, Math.round((initialRequest.kmHolgura || 0) - (initialRequest.kmAproximado || 0))) : DEFAULT_HOLGURA
   )
   const [rendimiento, setRendimiento] = useState<number>(initialRequest?.rendimiento ?? 10)
-  const [tipoGasolina, setTipoGasolina] = useState<keyof typeof GAS_PRICES>(
-    initialRequest?.tipoGasolina && initialRequest.tipoGasolina in GAS_PRICES ? initialRequest.tipoGasolina : 'VERDE'
+  const [tipoGasolina, setTipoGasolina] = useState<FuelType>(
+    initialRequest?.tipoGasolina && FUEL_TYPES.includes(initialRequest.tipoGasolina) ? initialRequest.tipoGasolina : 'VERDE'
   )
 
   // Mapa
@@ -316,14 +318,14 @@ export function FuelRequestForm({ vehicles, departments, defaultDepartamentoId, 
     const lts = Math.round((totalKm / ren) * 100) / 100
     setLitros(lts)
 
-    const pGas = GAS_PRICES[tipoGasolina]
+    const pGas = fuelPrices[tipoGasolina]
     const cGas = lts * pGas
     setCostoGas(cGas)
 
     const cCasetas = typeof costoCasetas === 'number' ? costoCasetas : 0
     
     setGranTotal(cGas + cCasetas)
-  }, [routeLegs, holgura, rendimiento, tipoGasolina, costoCasetas])
+  }, [routeLegs, holgura, rendimiento, tipoGasolina, costoCasetas, fuelPrices])
 
   const [showSignatureModal, setShowSignatureModal] = useState(false)
   // Al editar, el administrador puede solo guardar o guardar y dar el visto bueno en un paso.
@@ -350,7 +352,7 @@ export function FuelRequestForm({ vehicles, departments, defaultDepartamentoId, 
     kmHolgura: kmTotal,
     rendimiento,
     tipoGasolina,
-    precioGasolina: GAS_PRICES[tipoGasolina],
+    precioGasolina: fuelPrices[tipoGasolina],
     litrosSolicitados: litros,
     costoGasolina: costoGas,
     numCasetas: numCasetas || 0,
@@ -502,10 +504,32 @@ export function FuelRequestForm({ vehicles, departments, defaultDepartamentoId, 
                 const showTag = !!selected?.tieneTag || !!numeroTag
 
                 if (showTag) {
+                  // Un TAG guardado antes del catálogo (o ya borrado de él) se sigue mostrando para no perderlo.
+                  const options = numeroTag && !tagCards.some(t => t.numero === numeroTag)
+                    ? [...tagCards, { id: numeroTag, numero: numeroTag, ubicacion: null }]
+                    : tagCards
                   return (
                     <div className="space-y-2">
-                      <Label className="flex items-center gap-1.5"><Tag className="size-4 text-muted-foreground"/> Número de TAG</Label>
-                      <Input placeholder="ID del TAG" value={numeroTag} onChange={e => setNumeroTag(e.target.value.toUpperCase())} />
+                      <Label className="flex items-center gap-1.5"><Tag className="size-4 text-muted-foreground"/> TAG para casetas</Label>
+                      <Select value={numeroTag || NO_TAG} onValueChange={v => setNumeroTag(!v || v === NO_TAG ? '' : v)}>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Selecciona el TAG">{numeroTag || 'Sin TAG'}</SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={NO_TAG}>Sin TAG</SelectItem>
+                          {options.map(t => {
+                            const lost = /extraviad/i.test(t.ubicacion || '')
+                            return (
+                              <SelectItem key={t.id} value={t.numero} disabled={lost}>
+                                {t.numero}{t.ubicacion ? ` · ${t.ubicacion}` : ''}
+                              </SelectItem>
+                            )
+                          })}
+                        </SelectContent>
+                      </Select>
+                      {tagCards.length === 0 && (
+                        <p className="text-xs text-muted-foreground">No hay TAGs registrados. Un administrador puede darlos de alta en Organización.</p>
+                      )}
                     </div>
                   )
                 }
@@ -650,7 +674,7 @@ export function FuelRequestForm({ vehicles, departments, defaultDepartamentoId, 
                     {tipoGasolina === 'VERDE' ? 'Magna (Verde)' : tipoGasolina === 'ROJA' ? 'Premium (Roja)' : 'Diésel'}
                   </span>
                   <span className="font-mono text-primary font-bold">
-                    ${GAS_PRICES[tipoGasolina].toFixed(2)}/L
+                    ${fuelPrices[tipoGasolina].toFixed(2)}/L
                   </span>
                 </div>
               </div>

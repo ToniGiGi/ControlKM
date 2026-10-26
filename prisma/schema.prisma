@@ -364,6 +364,21 @@ model OrganizationConfig {
   lastFuelFolio   Int @default(0)
   lastTravelFolio Int @default(0)
 
+  // Precio por litro que usan las solicitudes de combustible
+  precioVerde  Float @default(23.79)
+  precioRoja   Float @default(28.55)
+  precioDiesel Float @default(28.00)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Tarjetas TAG de casetas. No pertenecen a un vehículo: los choferes se las
+// prestan, así que en cada solicitud se elige cuál se usará.
+model TagCard {
+  id        String   @id @default(cuid())
+  numero    String   @unique
+  ubicacion String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

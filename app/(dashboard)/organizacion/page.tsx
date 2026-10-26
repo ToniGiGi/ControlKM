@@ -26,6 +26,8 @@ import {
 import { useRole } from '@/components/role-provider'
 import { toast } from 'sonner'
 import { WhatsAppTestCard } from '@/components/organization/whatsapp-test-card'
+import { FuelPricesCard } from '@/components/organization/fuel-prices-card'
+import { TagCardsCard } from '@/components/organization/tag-cards-card'
 import Image from 'next/image'
 
 const ROLE_OPTIONS = [
@@ -42,6 +44,7 @@ function roleLabel(role: string) {
 export default function OrganizacionPage() {
   const { can } = useRole()
   const canManageUsers = can('gestionar_usuarios')
+  const canConfigure = can('configuracion')
 
   const [branches, setBranches] = useState<any[]>([])
   const [departments, setDepartments] = useState<any[]>([])
@@ -251,7 +254,7 @@ export default function OrganizacionPage() {
     <div className="flex-1 space-y-6 p-4 md:p-8 pt-6 max-w-screen-2xl mx-auto w-full">
       <PageHeader
         title="Configuración de mi Organización"
-        description="Administra el perfil de tu empresa, sucursales, áreas y aseguradoras."
+        description="Administra el perfil de tu empresa, sucursales, áreas, aseguradoras, precios de combustible y TAGs."
       />
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -500,6 +503,9 @@ export default function OrganizacionPage() {
             </div>
           </div>
         </div>
+
+        <FuelPricesCard canEdit={canConfigure} />
+        <TagCardsCard canEdit={canConfigure} />
       </div>
 
       {canManageUsers && <WhatsAppTestCard />}

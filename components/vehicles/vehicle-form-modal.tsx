@@ -257,18 +257,12 @@ export function VehicleFormModal({ isOpen, onClose, onSave, vehicle, sucursales 
                   checked={!!formData.tieneTag}
                   onChange={(e) => handleChange('tieneTag', e.target.checked)}
                 />
-                ¿Este vehículo cuenta con TAG?
+                <Tag className="size-3.5 text-muted-foreground" /> ¿Este vehículo cuenta con TAG?
               </label>
               {formData.tieneTag && (
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5"><Tag className="size-3.5" /> Número de TAG</label>
-                  <Input
-                    required
-                    value={formData.numeroTag || ''}
-                    onChange={(e) => handleChange('numeroTag', e.target.value.toUpperCase())}
-                    placeholder="Ej. IMDM31005090"
-                  />
-                </div>
+                <p className="text-xs text-muted-foreground">
+                  El TAG a usar se elige en cada solicitud de combustible, de los registrados en Organización.
+                </p>
               )}
             </div>
 

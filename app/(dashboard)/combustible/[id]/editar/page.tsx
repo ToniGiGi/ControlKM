@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { auth } from '@/auth'
-import { getVehicles, getDepartments, getFuelRequest } from '@/app/actions/db'
+import { getVehicles, getDepartments, getFuelRequest, getFuelPrices, getTagCards } from '@/app/actions/db'
 import { FuelRequestForm } from '@/components/fuel/fuel-request-form'
 import { PageHeader } from '@/components/page-header'
 import { Button } from '@/components/ui/button'
@@ -10,10 +10,12 @@ import Link from 'next/link'
 export default async function EditarSolicitudCombustiblePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const session = await auth()
-  const [request, vehicles, departments] = await Promise.all([
+  const [request, vehicles, departments, fuelPrices, tagCards] = await Promise.all([
     getFuelRequest(id),
     getVehicles(),
     getDepartments(),
+    getFuelPrices(),
+    getTagCards(),
   ])
 
   const role = String((session?.user as any)?.role || '').toUpperCase()
@@ -41,7 +43,7 @@ export default async function EditarSolicitudCombustiblePage({ params }: { param
         />
       </div>
 
-      <FuelRequestForm vehicles={vehicles} departments={departments} initialRequest={request} />
+      <FuelRequestForm vehicles={vehicles} departments={departments} initialRequest={request} fuelPrices={fuelPrices} tagCards={tagCards} />
     </div>
   )
 }

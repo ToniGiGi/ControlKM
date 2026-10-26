@@ -1273,6 +1273,68 @@ export async function updateOrganizationConfig(data: { name: string, logoUrl?: s
   return config
 }
 
+async function assertAdmin() {
+  const session = await auth()
+  const role = String((session?.user as any)?.role || '').toUpperCase()
+  if (role !== 'SUPER_ADMIN' && role !== 'ADMINISTRADOR') {
+    throw new Error('Solo un administrador puede hacer este cambio')
+  }
+}
+
+// --- Precios de combustible ---
+
+export type FuelPrices = { VERDE: number; ROJA: number; DIESEL: number }
+
+export async function getFuelPrices(): Promise<FuelPrices> {
+  const c = await getOrganizationConfig()
+  return { VERDE: c.precioVerde, ROJA: c.precioRoja, DIESEL: c.precioDiesel }
+}
+
+export async function updateFuelPrices(prices: FuelPrices) {
+  await assertAdmin()
+  const values = [prices.VERDE, prices.ROJA, prices.DIESEL]
+  if (values.some(v => typeof v !== 'number' || !Number.isFinite(v) || v <= 0)) {
+    throw new Error('Los precios deben ser mayores a cero')
+  }
+  const data = { precioVerde: prices.VERDE, precioRoja: prices.ROJA, precioDiesel: prices.DIESEL }
+  const prisma = getPrisma()
+  await prisma.organizationConfig.upsert({
+    where: { id: "default" },
+    update: data,
+    create: { id: "default", ...data },
+  })
+  revalidatePath('/organizacion')
+  revalidatePath('/combustible')
+}
+
+// --- Tarjetas TAG ---
+
+export async function getTagCards() {
+  const prisma = getPrisma()
+  return await prisma.tagCard.findMany({ orderBy: { numero: 'asc' } })
+}
+
+export async function createTagCard(data: { numero: string; ubicacion?: string }) {
+  await assertAdmin()
+  const numero = data.numero.trim().toUpperCase()
+  if (!numero) throw new Error('Captura el número del TAG')
+  const prisma = getPrisma()
+  if (await prisma.tagCard.findUnique({ where: { numero } })) {
+    throw new Error('Ese TAG ya está registrado')
+  }
+  const t = await prisma.tagCard.create({ data: { numero, ubicacion: data.ubicacion?.trim() || null } })
+  revalidatePath('/organizacion')
+  return t
+}
+
+export async function deleteTagCard(id: string) {
+  await assertAdmin()
+  const prisma = getPrisma()
+  const t = await prisma.tagCard.delete({ where: { id } })
+  revalidatePath('/organizacion')
+  return t
+}
+
 // --- Insurance Companies (Aseguradoras) ---
 
 export async function getInsuranceCompanies() {

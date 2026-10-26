@@ -1,5 +1,5 @@
 import { auth } from '@/auth'
-import { getVehicles, getDepartments } from '@/app/actions/db'
+import { getVehicles, getDepartments, getFuelPrices, getTagCards } from '@/app/actions/db'
 import { getProfile } from '@/app/actions/profile'
 import { FuelRequestForm } from '@/components/fuel/fuel-request-form'
 import { PageHeader } from '@/components/page-header'
@@ -9,10 +9,12 @@ import Link from 'next/link'
 
 export default async function NuevaSolicitudCombustiblePage() {
   const session = await auth()
-  const [vehicles, departments, profile] = await Promise.all([
+  const [vehicles, departments, profile, fuelPrices, tagCards] = await Promise.all([
     getVehicles(),
     getDepartments(),
     session?.user?.email ? getProfile(session.user.email) : Promise.resolve(null),
+    getFuelPrices(),
+    getTagCards(),
   ])
 
   const defaultDepartamentoId = profile?.employee?.departamentoId || ''
@@ -31,7 +33,7 @@ export default async function NuevaSolicitudCombustiblePage() {
         />
       </div>
 
-      <FuelRequestForm vehicles={vehicles} departments={departments} defaultDepartamentoId={defaultDepartamentoId} />
+      <FuelRequestForm vehicles={vehicles} departments={departments} defaultDepartamentoId={defaultDepartamentoId} fuelPrices={fuelPrices} tagCards={tagCards} />
     </div>
   )
 }
