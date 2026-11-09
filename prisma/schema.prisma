@@ -319,6 +319,9 @@ model TravelRequest {
   firmaPagoUrl        String? // firma de Cuentas por Pagar al entregar el dinero
   fechaPago           DateTime?
   observacionesRechazo String?
+  // El administrador ajustó la solicitud antes de aprobarla
+  modificadaPorAdmin  Boolean @default(false)
+  motivoModificacion  String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

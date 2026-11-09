@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   Calculator, Utensils, BedDouble, Car, Check, Minus, Plus,
@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Card, CardContent } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { createTravelRequest } from '@/app/actions/db'
+import { createTravelRequest, editTravelRequest, approveTravelRequest } from '@/app/actions/db'
 import { useRole } from '@/components/role-provider'
 import { SignatureModal } from '@/components/shared/signature-modal'
 import { cn } from '@/lib/utils'
@@ -161,47 +161,55 @@ function TransportItem({
 type TravelRequestFormProps = {
   fuelRequests: any[]
   defaultPuesto?: string
+  // Si viene, el formulario edita esta solicitud (solo PENDIENTES) en vez de crear una nueva.
+  initialRequest?: any
 }
 
-export function TravelRequestForm({ fuelRequests, defaultPuesto }: TravelRequestFormProps) {
+export function TravelRequestForm({ fuelRequests, defaultPuesto, initialRequest }: TravelRequestFormProps) {
   const router = useRouter()
-  const { role, config } = useRole()
+  const { role, config, can } = useRole()
+  const isEdit = !!initialRequest
+  const canApprove = can('aprobar_solicitudes')
+  const init = initialRequest
 
   const selectableFuelRequests = role === 'conductor'
     ? fuelRequests.filter(f => f.vehiculo?.empleadoId === config.empleadoId)
     : fuelRequests
 
   // Datos Generales
-  const [solicitanteNombre, setSolicitanteNombre] = useState(role === 'conductor' ? config.nombre : '')
-  const [puesto, setPuesto] = useState(defaultPuesto || '')
-  const [fecha, setFecha] = useState(toDateInputValue(new Date()))
-  const [asociadoPedido, setAsociadoPedido] = useState(false)
-  const [folioPedido, setFolioPedido] = useState('')
-  const [fuelRequestFolio, setFuelRequestFolio] = useState('')
+  const [solicitanteNombre, setSolicitanteNombre] = useState(init?.solicitanteNombre ?? (role === 'conductor' ? config.nombre : ''))
+  const [puesto, setPuesto] = useState(init?.puesto ?? (defaultPuesto || ''))
+  const [fecha, setFecha] = useState(toDateInputValue(init?.fecha ? new Date(init.fecha) : new Date()))
+  const [asociadoPedido, setAsociadoPedido] = useState<boolean>(init?.asociadoPedido ?? false)
+  const [folioPedido, setFolioPedido] = useState(init?.folioPedido ?? '')
+  const [fuelRequestFolio, setFuelRequestFolio] = useState(init?.fuelRequestFolio ?? '')
 
   // Comida
-  const [incluyeComida, setIncluyeComida] = useState(false)
-  const [numDesayunos, setNumDesayunos] = useState(0)
-  const [numComidas, setNumComidas] = useState(0)
-  const [numCenas, setNumCenas] = useState(0)
-  const [numPersonalizadoComida, setNumPersonalizadoComida] = useState(0)
-  const [precioPersonalizadoComida, setPrecioPersonalizadoComida] = useState<number | ''>('')
+  const [incluyeComida, setIncluyeComida] = useState<boolean>(init?.incluyeComida ?? false)
+  const [numDesayunos, setNumDesayunos] = useState<number>(init?.numDesayunos ?? 0)
+  const [numComidas, setNumComidas] = useState<number>(init?.numComidas ?? 0)
+  const [numCenas, setNumCenas] = useState<number>(init?.numCenas ?? 0)
+  const [numPersonalizadoComida, setNumPersonalizadoComida] = useState<number>(init?.numPersonalizadoComida ?? 0)
+  const [precioPersonalizadoComida, setPrecioPersonalizadoComida] = useState<number | ''>(init?.precioPersonalizadoComida || '')
 
   // Hospedaje
-  const [incluyeHospedaje, setIncluyeHospedaje] = useState(false)
-  const [numNoches, setNumNoches] = useState(0)
-  const [numPersonalizadoHospedaje, setNumPersonalizadoHospedaje] = useState(0)
-  const [precioPersonalizadoHospedaje, setPrecioPersonalizadoHospedaje] = useState<number | ''>('')
+  const [incluyeHospedaje, setIncluyeHospedaje] = useState<boolean>(init?.incluyeHospedaje ?? false)
+  const [numNoches, setNumNoches] = useState<number>(init?.numNoches ?? 0)
+  const [numPersonalizadoHospedaje, setNumPersonalizadoHospedaje] = useState<number>(init?.numPersonalizadoHospedaje ?? 0)
+  const [precioPersonalizadoHospedaje, setPrecioPersonalizadoHospedaje] = useState<number | ''>(init?.precioPersonalizadoHospedaje || '')
 
   // Transporte
-  const [incluyeTransporte, setIncluyeTransporte] = useState(false)
-  const [usaUberDidi, setUsaUberDidi] = useState(false)
-  const [montoUberDidi, setMontoUberDidi] = useState<number | ''>('')
-  const [usaAutobus, setUsaAutobus] = useState(false)
-  const [montoAutobus, setMontoAutobus] = useState<number | ''>('')
+  const [incluyeTransporte, setIncluyeTransporte] = useState<boolean>(init?.incluyeTransporte ?? false)
+  const [usaUberDidi, setUsaUberDidi] = useState<boolean>((init?.transporteUberDidi || 0) > 0)
+  const [montoUberDidi, setMontoUberDidi] = useState<number | ''>(init?.transporteUberDidi || '')
+  const [usaAutobus, setUsaAutobus] = useState<boolean>((init?.transporteAutobus || 0) > 0)
+  const [montoAutobus, setMontoAutobus] = useState<number | ''>(init?.transporteAutobus || '')
 
   const [showSignatureModal, setShowSignatureModal] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  // Al editar, el administrador puede solo guardar o guardar y dar el visto bueno en un paso.
+  const submitIntent = useRef<'save' | 'approve'>('save')
+  const [motivoModificacion, setMotivoModificacion] = useState<string>(init?.motivoModificacion ?? '')
 
   const costoComida = incluyeComida
     ? (numDesayunos + numComidas + numCenas) * PRECIO_COMIDA + numPersonalizadoComida * (Number(precioPersonalizadoComida) || 0)
@@ -217,45 +225,73 @@ export function TravelRequestForm({ fuelRequests, defaultPuesto }: TravelRequest
 
   const hasAnyViatico = incluyeComida || incluyeHospedaje || incluyeTransporte
 
+  const buildPayload = () => ({
+    ...(isEdit && canApprove ? { motivoModificacion: motivoModificacion.trim() } : {}),
+    solicitanteNombre,
+    puesto,
+    fecha: new Date(fecha),
+    asociadoPedido,
+    folioPedido: asociadoPedido ? folioPedido : null,
+    fuelRequestFolio: fuelRequestFolio || null,
+    incluyeComida,
+    numDesayunos,
+    numComidas,
+    numCenas,
+    numPersonalizadoComida,
+    precioPersonalizadoComida: Number(precioPersonalizadoComida) || 0,
+    costoComida,
+    incluyeHospedaje,
+    numNoches,
+    numPersonalizadoHospedaje,
+    precioPersonalizadoHospedaje: Number(precioPersonalizadoHospedaje) || 0,
+    costoHospedaje,
+    incluyeTransporte,
+    transporteUberDidi: incluyeTransporte && usaUberDidi ? (Number(montoUberDidi) || 0) : 0,
+    transporteAutobus: incluyeTransporte && usaAutobus ? (Number(montoAutobus) || 0) : 0,
+    costoTransporte,
+    costoTotal,
+  })
+
+  const saveEdit = async (firmaAprobadorUrl?: string) => {
+    setIsSubmitting(true)
+    try {
+      await editTravelRequest(initialRequest.id, buildPayload())
+      if (firmaAprobadorUrl) await approveTravelRequest(initialRequest.id, firmaAprobadorUrl)
+      router.push('/viaticos')
+      router.refresh()
+    } catch (err) {
+      console.error(err)
+      alert('Error al guardar los cambios de la solicitud')
+      setIsSubmitting(false)
+    }
+  }
+
+  // Crear o aprobar pide firma; guardar cambios de una solicitud existente no.
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!hasAnyViatico) {
       alert('Selecciona al menos un rubro de viáticos (Comida, Hospedaje o Transporte).')
       return
     }
+    if (isEdit && submitIntent.current === 'save') {
+      saveEdit()
+      return
+    }
     setShowSignatureModal(true)
   }
 
-  const handleConfirmSignature = async (firmaSolicitanteUrl: string) => {
+  const handleConfirmSignature = async (firmaUrl: string) => {
+    if (isEdit) {
+      await saveEdit(firmaUrl)
+      return
+    }
     setIsSubmitting(true)
     try {
       await createTravelRequest({
+        ...buildPayload(),
         empleadoId: config.empleadoId || null,
-        solicitanteNombre,
-        puesto,
-        fecha: new Date(fecha),
-        asociadoPedido,
-        folioPedido: asociadoPedido ? folioPedido : null,
-        fuelRequestFolio: fuelRequestFolio || null,
-        incluyeComida,
-        numDesayunos,
-        numComidas,
-        numCenas,
-        numPersonalizadoComida,
-        precioPersonalizadoComida: Number(precioPersonalizadoComida) || 0,
-        costoComida,
-        incluyeHospedaje,
-        numNoches,
-        numPersonalizadoHospedaje,
-        precioPersonalizadoHospedaje: Number(precioPersonalizadoHospedaje) || 0,
-        costoHospedaje,
-        incluyeTransporte,
-        transporteUberDidi: usaUberDidi ? (Number(montoUberDidi) || 0) : 0,
-        transporteAutobus: usaAutobus ? (Number(montoAutobus) || 0) : 0,
-        costoTransporte,
-        costoTotal,
         estado: 'PENDIENTE',
-        firmaSolicitanteUrl,
+        firmaSolicitanteUrl: firmaUrl,
       })
 
       router.push('/viaticos')
@@ -416,11 +452,48 @@ export function TravelRequestForm({ fuelRequests, defaultPuesto }: TravelRequest
             </CardContent>
           </Card>
 
+          {isEdit && canApprove && (
+            <div className="space-y-2">
+              <Label>Motivo de la modificación <span className="text-destructive">*</span></Label>
+              <Input
+                required
+                placeholder="Ej. Se ajustaron las noches de hospedaje a lo que autoriza la política"
+                value={motivoModificacion}
+                onChange={(e) => setMotivoModificacion(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">El solicitante recibirá este motivo por WhatsApp cuando se apruebe la solicitud.</p>
+            </div>
+          )}
+
           <div className="pt-6 flex justify-end gap-4 border-t">
             <Button type="button" variant="outline" onClick={() => router.push('/viaticos')} disabled={isSubmitting}>Cancelar</Button>
-            <Button type="submit" disabled={isSubmitting} className="min-w-[200px] text-base h-11">
-              {isSubmitting ? 'Guardando...' : 'Firmar y Generar Solicitud'}
-            </Button>
+            {isEdit ? (
+              <>
+                <Button
+                  type="submit"
+                  variant={canApprove ? 'outline' : 'default'}
+                  disabled={isSubmitting}
+                  className="min-w-[160px] text-base h-11"
+                  onClick={() => { submitIntent.current = 'save' }}
+                >
+                  {isSubmitting ? 'Guardando...' : 'Guardar cambios'}
+                </Button>
+                {canApprove && (
+                  <Button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="min-w-[200px] text-base h-11"
+                    onClick={() => { submitIntent.current = 'approve' }}
+                  >
+                    Guardar y dar visto bueno
+                  </Button>
+                )}
+              </>
+            ) : (
+              <Button type="submit" disabled={isSubmitting} className="min-w-[200px] text-base h-11">
+                {isSubmitting ? 'Guardando...' : 'Firmar y Generar Solicitud'}
+              </Button>
+            )}
           </div>
         </form>
       </CardContent>
@@ -429,9 +502,11 @@ export function TravelRequestForm({ fuelRequests, defaultPuesto }: TravelRequest
     <SignatureModal
       open={showSignatureModal}
       onOpenChange={setShowSignatureModal}
-      title="Firma del Solicitante"
-      description="Dibuja tu firma para confirmar y enviar la solicitud de viáticos."
-      confirmLabel="Firmar y Enviar"
+      title={isEdit ? 'Firma del Visto Bueno' : 'Firma del Solicitante'}
+      description={isEdit
+        ? 'Firma para aprobar la solicitud con las modificaciones que hiciste.'
+        : 'Dibuja tu firma para confirmar y enviar la solicitud de viáticos.'}
+      confirmLabel={isEdit ? 'Guardar y Aprobar' : 'Firmar y Enviar'}
       onConfirm={handleConfirmSignature}
     />
     </>

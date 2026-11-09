@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useState, useMemo, useEffect } from 'react'
-import { Plus, Search, Wallet, Utensils, BedDouble, Car, CheckCircle, XCircle, FileDown, Trash2, FileText, Fuel, LayoutGrid, List, Banknote, FileSpreadsheet } from 'lucide-react'
+import { Plus, Search, Wallet, Utensils, BedDouble, Car, CheckCircle, XCircle, FileDown, Trash2, FileText, Fuel, LayoutGrid, List, Banknote, FileSpreadsheet, Pencil } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -37,6 +37,8 @@ export function TravelRequestList({ initialRequests }: TravelRequestListProps) {
   const isConductor = role === 'conductor'
   // Cuentas por Pagar no puede dar visto bueno: solo ve lo que ya está listo para pagar o ya pagó.
   const isCuentasPorPagar = role === 'cuentas_por_pagar'
+  // El conductor solo ve las suyas, así que puede editar cualquiera de su lista mientras esté pendiente.
+  const canEdit = (r: any) => r.estado === 'PENDIENTE' && (can('aprobar_solicitudes') || isConductor)
 
   const [requests, setRequests] = useState(initialRequests)
   const [query, setQuery] = useState('')
@@ -346,6 +348,9 @@ export function TravelRequestList({ initialRequests }: TravelRequestListProps) {
                     <Badge variant="outline" className={badgeClass}>
                       {r.estado}
                     </Badge>
+                    {r.modificadaPorAdmin && (
+                      <span className="text-[10px] font-medium text-amber-600">Con modificaciones</span>
+                    )}
                     {r.folio && (
                       <span className="text-[10px] font-mono text-muted-foreground">{r.folio}</span>
                     )}
@@ -364,6 +369,12 @@ export function TravelRequestList({ initialRequests }: TravelRequestListProps) {
                     <div className="mb-4 text-sm bg-red-50 dark:bg-red-950/20 p-3 rounded-md border border-red-200 dark:border-red-900/40">
                       <p className="text-[10px] uppercase font-bold tracking-wider text-red-600 mb-1">Motivo del rechazo</p>
                       <p className="text-xs text-red-700 dark:text-red-400 leading-relaxed">{r.observacionesRechazo}</p>
+                    </div>
+                  )}
+                  {r.modificadaPorAdmin && r.motivoModificacion && (
+                    <div className="mb-4 text-sm bg-amber-50 dark:bg-amber-950/20 p-3 rounded-md border border-amber-200 dark:border-amber-900/40">
+                      <p className="text-[10px] uppercase font-bold tracking-wider text-amber-600 mb-1">Motivo de la modificación</p>
+                      <p className="text-xs text-amber-700 dark:text-amber-400 leading-relaxed">{r.motivoModificacion}</p>
                     </div>
                   )}
 
@@ -407,6 +418,14 @@ export function TravelRequestList({ initialRequests }: TravelRequestListProps) {
                         <FileDown className="size-3.5" />
                         <span className="sr-only sm:not-sr-only">Generar PDF</span>
                       </Button>
+                      {canEdit(r) && (
+                        <Link href={`/viaticos/${r.id}/editar`}>
+                          <Button variant="ghost" size="sm" className="h-8 text-xs gap-0 sm:gap-1.5 text-muted-foreground hover:text-foreground">
+                            <Pencil className="size-3.5" />
+                            <span className="sr-only sm:not-sr-only">Editar</span>
+                          </Button>
+                        </Link>
+                      )}
                     </div>
 
                     {r.estado === 'PENDIENTE' && can('aprobar_solicitudes') && (
@@ -533,12 +552,22 @@ export function TravelRequestList({ initialRequests }: TravelRequestListProps) {
                         <Badge variant="outline" className={`text-xs ${badgeClass}`}>
                           {r.estado}
                         </Badge>
+                        {r.modificadaPorAdmin && (
+                          <span className="block mt-1 text-[10px] font-medium text-amber-600">Con modificaciones</span>
+                        )}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end items-center gap-1">
                           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setPdfData(r)} title="Generar PDF">
                             <FileDown className="size-4 text-muted-foreground" />
                           </Button>
+                          {canEdit(r) && (
+                            <Link href={`/viaticos/${r.id}/editar`}>
+                              <Button variant="ghost" size="icon" className="h-8 w-8" title="Editar">
+                                <Pencil className="size-4 text-muted-foreground" />
+                              </Button>
+                            </Link>
+                          )}
                           {r.estado === 'PENDIENTE' && can('aprobar_solicitudes') && (
                             <>
                               <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-600" onClick={() => handleReject(r.id)} title="Rechazar">

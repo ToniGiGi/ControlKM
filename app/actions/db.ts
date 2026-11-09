@@ -687,6 +687,42 @@ export async function createTravelRequest(data: any) {
   return req
 }
 
+export async function getTravelRequest(id: string) {
+  const prisma = getPrisma()
+  return await prisma.travelRequest.findUnique({ where: { id } })
+}
+
+// Solo solicitudes PENDIENTES: el empleado corrige las suyas y el administrador
+// puede ajustar el monto antes de dar el visto bueno (queda marcada como modificada).
+export async function editTravelRequest(id: string, data: any) {
+  const session = await auth()
+  const role = String((session?.user as any)?.role || '').toUpperCase()
+  const employeeId = (session?.user as any)?.employeeId
+  const isAdmin = role === 'SUPER_ADMIN' || role === 'ADMINISTRADOR'
+
+  const prisma = getPrisma()
+  const current = await prisma.travelRequest.findUnique({ where: { id } })
+  if (!current) throw new Error('Solicitud no encontrada')
+  if (current.estado !== 'PENDIENTE') throw new Error('Solo se pueden editar solicitudes pendientes')
+  if (!isAdmin && (role !== 'CONDUCTOR' || !employeeId || current.empleadoId !== employeeId)) {
+    throw new Error('No tienes permiso para editar esta solicitud')
+  }
+
+  const {
+    id: _id, empleadoId, estado, folio, firmaSolicitanteUrl, firmaAprobadorUrl, firmaPagoUrl,
+    fechaPago, modificadaPorAdmin, observacionesRechazo, motivoModificacion, createdAt, updatedAt, ...rest
+  } = data
+  if (rest.fecha) rest.fecha = new Date(rest.fecha)
+
+  await prisma.travelRequest.update({
+    where: { id },
+    data: { ...rest, ...(isAdmin ? { modificadaPorAdmin: true, motivoModificacion: motivoModificacion || null } : {}) },
+  })
+
+  revalidatePath('/viaticos')
+  return { success: true }
+}
+
 export async function deleteTravelRequest(id: string) {
   const prisma = getPrisma()
   const req = await prisma.travelRequest.delete({ where: { id } })
@@ -705,8 +741,9 @@ export async function approveTravelRequest(id: string, firmaAprobadorUrl?: strin
   await Promise.all([
     notifyRoleByWhatsApp('CUENTAS_POR_PAGAR',
       `✅ *Solicitud de viáticos aprobada* ${req.folio}\nSolicitante: ${req.solicitanteNombre || 'Sin nombre'}\nMonto a pagar: ${mxn(req.costoTotal)}\n\nLista para pago: https://controlkm.com/viaticos`),
-    notifyEmployeeByWhatsApp(req.empleadoId,
-      `✅ *Tu solicitud de viáticos ${req.folio} fue aceptada*\nAceptada por: ${aprobador}\nMonto autorizado: ${mxn(req.costoTotal)}`),
+    notifyEmployeeByWhatsApp(req.empleadoId, req.modificadaPorAdmin
+      ? `✅ *Tu solicitud de viáticos ${req.folio} fue aceptada con modificaciones*\nAceptada por: ${aprobador}\nMotivo de la modificación: ${req.motivoModificacion || 'No especificado'}\nMonto autorizado: ${mxn(req.costoTotal)}\n\nRevísala en https://controlkm.com/viaticos`
+      : `✅ *Tu solicitud de viáticos ${req.folio} fue aceptada*\nAceptada por: ${aprobador}\nMonto autorizado: ${mxn(req.costoTotal)}`),
   ])
 
   revalidatePath('/viaticos')
@@ -1067,8 +1104,10 @@ export async function getAlerts(empleadoId?: string, role?: string) {
     } else if (isConductor && req.estado === 'APROBADA') {
       generatedAlerts.push({
         id: `viaticos-aprobada-${req.id}`,
-        tipo: 'Solicitud Aprobada',
-        mensaje: `Tu solicitud de viáticos fue aprobada y está pendiente de pago`,
+        tipo: req.modificadaPorAdmin ? 'Aprobada con modificaciones' : 'Solicitud Aprobada',
+        mensaje: req.modificadaPorAdmin
+          ? `Tu solicitud de viáticos fue aceptada pero con modificaciones del administrador. Revísala; está pendiente de pago`
+          : `Tu solicitud de viáticos fue aprobada y está pendiente de pago`,
         severidad: 'media',
         href: '/viaticos',
         fecha: req.updatedAt
