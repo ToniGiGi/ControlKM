@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect } from 'react'
+import { useListView } from '@/lib/use-list-view'
 import { Plus, Search, Calendar, Gauge, Wrench, Pencil, FileText, LayoutGrid, List, DollarSign, Trash2, CheckCircle, XCircle } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -37,7 +38,7 @@ export function MaintenanceList({ initialMaintenances, vehicles }: MaintenanceLi
   const [query, setQuery] = useState('')
   const [tipo, setTipo] = useState('todos')
   const [estado, setEstado] = useState('todas')
-  const [view, setView] = useState<'grid' | 'table'>('grid')
+  const [view, setView] = useListView()
   const [page, setPage] = useState(1)
   
   const [isFormOpen, setIsFormOpen] = useState(false)

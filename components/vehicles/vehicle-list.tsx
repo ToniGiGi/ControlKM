@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState, useEffect } from 'react'
+import { useListView } from '@/lib/use-list-view'
 import Link from 'next/link'
 import { Search, LayoutGrid, List, Plus } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
@@ -103,7 +104,7 @@ export function VehicleList({
   const [query, setQuery] = useState('')
   const [estado, setEstado] = useState<'todos' | VehicleStatus>('todos')
   const [sucursal, setSucursal] = useState<string>('todas')
-  const [view, setView] = useState<'grid' | 'table'>('grid')
+  const [view, setView] = useListView()
   
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null)

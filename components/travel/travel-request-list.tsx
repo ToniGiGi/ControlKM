@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useState, useMemo, useEffect } from 'react'
+import { useListView } from '@/lib/use-list-view'
 import { Plus, Search, Wallet, Utensils, BedDouble, Car, CheckCircle, XCircle, FileDown, Trash2, FileText, Fuel, LayoutGrid, List, Banknote, FileSpreadsheet, Pencil } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -45,7 +46,7 @@ export function TravelRequestList({ initialRequests }: TravelRequestListProps) {
   const [estado, setEstado] = useState('todos')
   const [fechaDesde, setFechaDesde] = useState('')
   const [fechaHasta, setFechaHasta] = useState('')
-  const [view, setView] = useState<'grid' | 'table'>('grid')
+  const [view, setView] = useListView()
   const [page, setPage] = useState(1)
 
   const [pdfData, setPdfData] = useState<any | null>(null)

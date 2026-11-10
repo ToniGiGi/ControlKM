@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useState, useMemo, useEffect, useRef } from 'react'
+import { useListView } from '@/lib/use-list-view'
 import { Plus, Search, Fuel, CreditCard, Banknote, Map, CheckCircle, XCircle, FileDown, Trash2, LayoutGrid, List, FileSpreadsheet, Pencil, Columns3, Route } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -51,7 +52,7 @@ export function FuelRequestList({ initialRequests, vehicles }: FuelRequestListPr
   const [estado, setEstado] = useState('todos')
   const [fechaDesde, setFechaDesde] = useState('')
   const [fechaHasta, setFechaHasta] = useState('')
-  const [view, setView] = useState<'grid' | 'table'>('grid')
+  const [view, setView] = useListView()
   const [showColumnsDialog, setShowColumnsDialog] = useState(false)
   const [routeData, setRouteData] = useState<any | null>(null)
   // La barra de filtros mide lo mismo que la tabla y siempre está en pantalla, así que sirve

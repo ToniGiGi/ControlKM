@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect } from 'react'
+import { useListView } from '@/lib/use-list-view'
 import { Plus, Search, ShieldAlert, Calendar, Banknote, Car, Pencil, FileText, LayoutGrid, List, Trash2 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -73,7 +74,7 @@ export function InsuranceList({ initialInsurances, vehicles, insuranceCompanies 
   const [insurances, setInsurances] = useState(initialInsurances)
   const [query, setQuery] = useState('')
   const [estado, setEstado] = useState('todos')
-  const [view, setView] = useState<'grid' | 'table'>('grid')
+  const [view, setView] = useListView()
   const [page, setPage] = useState(1)
 
   const [isFormOpen, setIsFormOpen] = useState(false)

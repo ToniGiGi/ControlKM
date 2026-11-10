@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState, useEffect } from 'react'
+import { useListView } from '@/lib/use-list-view'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import {
@@ -99,7 +100,7 @@ export function EmployeeList({ initialEmployees, initialVehicles, branches = [],
   const [selected, setSelected] = useState<Employee | null>(null)
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null)
-  const [view, setView] = useState<'grid' | 'table'>('grid')
+  const [view, setView] = useListView()
 
   const sucursales = useMemo(
     () => branches.map(b => b.name),

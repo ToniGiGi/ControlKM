@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect } from 'react'
+import { useListView } from '@/lib/use-list-view'
 import { Plus, Search, Calendar, DollarSign, LayoutGrid, List, FileText, Pencil, TriangleAlert, ShieldAlert, CarFront, Settings2, ShieldCheck, Siren } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -62,7 +63,7 @@ export function IncidentList({ initialIncidents, vehicles }: IncidentListProps) 
   const [query, setQuery] = useState('')
   const [estado, setEstado] = useState('todos')
   const [gravedad, setGravedad] = useState('todas')
-  const [view, setView] = useState<'grid' | 'table'>('grid')
+  const [view, setView] = useListView()
   const [page, setPage] = useState(1)
 
   const [isFormOpen, setIsFormOpen] = useState(false)

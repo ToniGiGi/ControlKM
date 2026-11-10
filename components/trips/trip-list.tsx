@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect } from 'react'
+import { useListView } from '@/lib/use-list-view'
 import { Search, Calendar, LayoutGrid, List, MapPin, Navigation, CarFront, User, Map, Fuel, DollarSign, Route } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -26,7 +27,7 @@ type TripListProps = {
 
 export function TripList({ initialTrips }: TripListProps) {
   const [query, setQuery] = useState('')
-  const [view, setView] = useState<'grid' | 'table'>('grid')
+  const [view, setView] = useListView()
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [page, setPage] = useState(1)
