@@ -1366,6 +1366,19 @@ export async function createTagCard(data: { numero: string; ubicacion?: string }
   return t
 }
 
+// Las solicitudes guardan el número como texto, así que corregirlo aquí no altera las ya enviadas.
+export async function updateTagCard(id: string, data: { numero: string; ubicacion?: string }) {
+  await assertAdmin()
+  const numero = data.numero.trim().toUpperCase()
+  if (!numero) throw new Error('Captura el número del TAG')
+  const prisma = getPrisma()
+  const existing = await prisma.tagCard.findUnique({ where: { numero } })
+  if (existing && existing.id !== id) throw new Error('Ese TAG ya está registrado')
+  const t = await prisma.tagCard.update({ where: { id }, data: { numero, ubicacion: data.ubicacion?.trim() || null } })
+  revalidatePath('/organizacion')
+  return t
+}
+
 export async function deleteTagCard(id: string) {
   await assertAdmin()
   const prisma = getPrisma()

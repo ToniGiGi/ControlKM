@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Plus, Tag, Trash2 } from 'lucide-react'
+import { Check, Pencil, Plus, Tag, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -15,7 +15,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { getTagCards, createTagCard, deleteTagCard } from '@/app/actions/db'
+import { getTagCards, createTagCard, updateTagCard, deleteTagCard } from '@/app/actions/db'
 
 // Catálogo de TAGs de casetas: de aquí se elige cuál se usa en cada solicitud de combustible.
 export function TagCardsCard({ canEdit }: { canEdit: boolean }) {
@@ -24,6 +24,10 @@ export function TagCardsCard({ canEdit }: { canEdit: boolean }) {
   const [numero, setNumero] = useState('')
   const [ubicacion, setUbicacion] = useState('')
   const [tagToDelete, setTagToDelete] = useState<any>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editNumero, setEditNumero] = useState('')
+  const [editUbicacion, setEditUbicacion] = useState('')
+  const [isSavingEdit, setIsSavingEdit] = useState(false)
 
   const loadTags = async () => {
     try {
@@ -52,6 +56,30 @@ export function TagCardsCard({ canEdit }: { canEdit: boolean }) {
     } catch (e: any) {
       toast.error(e.message || 'Error al agregar el TAG')
     }
+  }
+
+  const startEdit = (t: any) => {
+    setEditingId(t.id)
+    setEditNumero(t.numero)
+    setEditUbicacion(t.ubicacion || '')
+  }
+
+  const handleSaveEdit = async () => {
+    if (!editingId) return
+    if (!editNumero.trim()) {
+      toast.error('Captura el número del TAG.')
+      return
+    }
+    setIsSavingEdit(true)
+    try {
+      await updateTagCard(editingId, { numero: editNumero, ubicacion: editUbicacion })
+      toast.success('TAG actualizado')
+      setEditingId(null)
+      loadTags()
+    } catch (e: any) {
+      toast.error(e.message || 'Error al actualizar el TAG')
+    }
+    setIsSavingEdit(false)
   }
 
   const handleDelete = async () => {
@@ -120,6 +148,36 @@ export function TagCardsCard({ canEdit }: { canEdit: boolean }) {
             <ul className="divide-y">
               {tags.map(t => {
                 const lost = /extraviad/i.test(t.ubicacion || '')
+                if (editingId === t.id) {
+                  return (
+                    <li key={t.id} className="p-3 flex flex-col sm:flex-row gap-2 bg-muted/30">
+                      <Input
+                        autoFocus
+                        value={editNumero}
+                        onChange={e => setEditNumero(e.target.value.toUpperCase())}
+                        onKeyDown={e => { if (e.key === 'Enter') handleSaveEdit(); if (e.key === 'Escape') setEditingId(null) }}
+                        className="flex-1 bg-background font-mono"
+                        aria-label="Número del TAG"
+                      />
+                      <Input
+                        value={editUbicacion}
+                        placeholder="Ubicación"
+                        onChange={e => setEditUbicacion(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') handleSaveEdit(); if (e.key === 'Escape') setEditingId(null) }}
+                        className="sm:w-40 bg-background"
+                        aria-label="Ubicación"
+                      />
+                      <div className="flex gap-1 justify-end">
+                        <Button size="icon" onClick={handleSaveEdit} disabled={isSavingEdit} title="Guardar">
+                          <Check className="w-4 h-4" />
+                        </Button>
+                        <Button size="icon" variant="ghost" onClick={() => setEditingId(null)} disabled={isSavingEdit} title="Cancelar">
+                          <X className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </li>
+                  )
+                }
                 return (
                   <li key={t.id} className="p-4 flex justify-between items-center gap-3 hover:bg-muted/30 transition-colors group">
                     <div className="min-w-0">
@@ -131,9 +189,14 @@ export function TagCardsCard({ canEdit }: { canEdit: boolean }) {
                       )}
                     </div>
                     {canEdit && (
-                      <Button variant="ghost" size="icon" onClick={() => setTagToDelete(t)} className="shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+                      <div className="flex shrink-0 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                        <Button variant="ghost" size="icon" onClick={() => startEdit(t)} className="text-muted-foreground hover:text-foreground" title="Editar">
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => setTagToDelete(t)} className="text-muted-foreground hover:text-destructive hover:bg-destructive/10" title="Eliminar">
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
                     )}
                   </li>
                 )
